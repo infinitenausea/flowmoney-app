@@ -52,7 +52,7 @@ const DonutChart = (() => {
     _lastData.forEach((item, i) => {
       // Enrich with category data from Store — makes the chart self-sufficient
       // regardless of whether the caller pre-enriched the data or not
-      const category = (Store.state.categories || []).find(c => c.id === item.category_id);
+      const category = (Store.state.categories || []).find(c => String(c.id) === String(item.category_id));
       const color    = category ? category.color : (item.color || `hsl(${(i * 53) % 360},65%,55%)`);
       const name     = category ? category.name  : (item.name  || 'Разное');
 
@@ -167,7 +167,7 @@ const DonutChart = (() => {
       items.forEach(tx => {
         // Primary lookup: Store.state.categories (authoritative, always fresh)
         // Fallback: catMap built from the passed categories argument
-        const category     = (Store.state.categories || []).find(c => c.id === tx.category_id);
+        const category     = (Store.state.categories || []).find(c => String(c.id) === String(tx.category_id));
         const cat          = category || catMap[tx.category_id] || {};
         const color        = cat.color || '#888888';
         const categoryIcon = cat.icon  || '💰';

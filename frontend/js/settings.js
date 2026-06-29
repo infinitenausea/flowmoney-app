@@ -1,17 +1,25 @@
 /**
- * FlowMoney — Budget Settings Module (Этап 5.3)
+ * FlowMoney — Budget Settings Module
  *
  * Responsibilities:
- *  - Bind <input type="range"> sliders to Store
- *  - Persist limits to localStorage (survives server outages)
- *  - Best-effort PUT /api/v1/budgets (debounced, silent on failure)
- *  - Render weekly / monthly progress bars
- *  - Compute and push dailyAvailable into Store whenever limits or transactions change
+ *  - Currency <select> → Store.state.currency → server sync
+ *  - Tappable limit buttons → bottom-sheet modal with reused numpad logic
+ *  - Persist limits + currency to localStorage (offline-first)
+ *  - Best-effort PUT /api/v1/settings (debounced, silent on failure)
+ *  - Weekly / monthly progress bars
+ *  - Compute and push dailyAvailable into Store when limits or transactions change
  */
 
 const Settings = (() => {
   const STORAGE_KEY = 'flowmoney_budgets';
-  let _debounce = null;
+
+  let _debounce   = null;
+  let _editingLimit = null; // 'daily' | 'weekly' | 'monthly'
+  let _budgetInput  = '';
+
+  const MAX_DIGITS   = 7;
+  const MAX_DECIMALS = 2;
+  const MAX_AMOUNT   = 9999999;
 
   // ── Persistence ──────────────────────────────────────────────────────────
 
@@ -22,27 +30,38 @@ const Settings = (() => {
     } catch { return null; }
   }
 
-  function _persist(weekly, monthly) {
+  function _persist(daily, weekly, monthly) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ weeklyLimit: weekly, monthlyLimit: monthly }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        dailyLimit:   daily,
+        weeklyLimit:  weekly,
+        monthlyLimit: monthly,
+      }));
     } catch (e) {
       console.warn('[Settings] persist failed:', e.message);
     }
   }
 
-  // Best-effort sync — the spec has no /budgets endpoint yet, so failures are silent
-  function _syncToServer(weekly, monthly) {
+  function _syncToServer() {
     clearTimeout(_debounce);
     _debounce = setTimeout(async () => {
       if (!navigator.onLine) return;
       try {
         const initData = window.Telegram?.WebApp?.initData || '';
-        await fetch('/api/v1/budgets', {
+        await fetch('/api/v1/settings', {
           method:  'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Telegram ${initData}` },
-          body:    JSON.stringify({ weekly_limit: weekly, monthly_limit: monthly }),
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Telegram ${initData}`,
+          },
+          body: JSON.stringify({
+            currency:      Store.state.currency      || 'RUB',
+            daily_limit:   Store.state.dailyLimit    || 0,
+            weekly_limit:  Store.state.weeklyLimit   || 0,
+            monthly_limit: Store.state.monthlyLimit  || 0,
+          }),
         });
-      } catch { /* silent */ }
+      } catch { /* silent — offline-first */ }
     }, 1500);
   }
 
@@ -60,9 +79,9 @@ const Settings = (() => {
 
     Store.state.dailyLimit = dailyLimit;
 
-    const today = new Date();
+    const today   = new Date();
     const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const spent = (Store.state.transactions || [])
+    const spent   = (Store.state.transactions || [])
       .filter(tx => !tx.is_deleted && new Date(tx.created_at).getTime() >= todayMs)
       .reduce((s, tx) => s + Number(tx.amount), 0);
 
@@ -73,7 +92,7 @@ const Settings = (() => {
 
   function renderProgressBars() {
     const txs = Store.state.transactions || [];
-    const cur = Store.state.currency || '₽';
+    const cur = Store.state.currency || 'RUB';
     const now = new Date();
 
     const wLimit = Store.state.weeklyLimit || 0;
@@ -112,62 +131,309 @@ const Settings = (() => {
     }
   }
 
+  // ── Limit display helper ─────────────────────────────────────────────────
+
+  function _refreshLimitDisplays() {
+    const cur = Store.state.currency || 'RUB';
+    const fmt = typeof formatCurrency === 'function' ? formatCurrency : (v) => String(v);
+
+    const d = document.getElementById('daily-limit-display');
+    const w = document.getElementById('weekly-limit-display');
+    const m = document.getElementById('monthly-limit-display');
+
+    if (d) d.textContent = (Store.state.dailyLimit   > 0) ? fmt(Store.state.dailyLimit,   cur) : '—';
+    if (w) w.textContent = (Store.state.weeklyLimit  > 0) ? fmt(Store.state.weeklyLimit,  cur) : '—';
+    if (m) m.textContent = (Store.state.monthlyLimit > 0) ? fmt(Store.state.monthlyLimit, cur) : '—';
+  }
+
+  // ── Modal ────────────────────────────────────────────────────────────────
+
+  const _TITLES = {
+    daily:   'Дневной лимит',
+    weekly:  'Недельный лимит',
+    monthly: 'Месячный лимит',
+  };
+
+  function _openModal(limitType) {
+    _editingLimit = limitType;
+
+    let initialAmount = '';
+    let title         = _TITLES[limitType] || 'Лимит';
+    let currencyCode  = Store.state.currency || 'RUB';
+
+    if (limitType === 'converter') {
+      const fromEl  = document.getElementById('converter-from-amount');
+      const fromSel = document.getElementById('converter-from-currency');
+      const text    = fromEl ? fromEl.textContent : '0';
+      initialAmount = (text && text !== '0') ? text : '';
+      title         = 'Сумма';
+      currencyCode  = fromSel ? fromSel.value : currencyCode;
+    } else {
+      const currentVal = {
+        daily:   Store.state.dailyLimit   || 0,
+        weekly:  Store.state.weeklyLimit  || 0,
+        monthly: Store.state.monthlyLimit || 0,
+      }[limitType] || 0;
+      initialAmount = currentVal > 0 ? String(Math.round(currentVal * 100) / 100) : '';
+    }
+
+    _budgetInput = initialAmount;
+
+    const modal    = document.getElementById('budget-modal');
+    const titleEl  = document.getElementById('budget-modal-title');
+    const amountEl = document.getElementById('budget-modal-amount');
+    const curEl    = document.getElementById('budget-modal-currency');
+
+    if (titleEl)  titleEl.textContent  = title;
+    if (amountEl) amountEl.textContent = _budgetInput || '0';
+    if (curEl) {
+      curEl.textContent = typeof getCurrencySymbol === 'function'
+        ? getCurrencySymbol(currencyCode)
+        : (currencyCode || '₽');
+    }
+
+    if (modal) {
+      modal.setAttribute('aria-hidden', 'false');
+      requestAnimationFrame(() => modal.classList.add('open'));
+    }
+
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+  }
+
+  function _closeModal() {
+    const modal = document.getElementById('budget-modal');
+    if (modal) {
+      modal.classList.remove('open');
+      setTimeout(() => modal.setAttribute('aria-hidden', 'true'), 340);
+    }
+    _editingLimit = null;
+    _budgetInput  = '';
+  }
+
+  function _handleBudgetKey(key) {
+    if (key === 'backspace') {
+      _budgetInput = _budgetInput.slice(0, -1);
+    } else if (key === '.') {
+      if (_budgetInput.includes('.')) return;
+      _budgetInput = _budgetInput === '' ? '0.' : _budgetInput + '.';
+    } else {
+      const parts = _budgetInput.split('.');
+      if (!_budgetInput.includes('.') && parts[0].length >= MAX_DIGITS) return;
+      if (parts[1] !== undefined && parts[1].length >= MAX_DECIMALS)     return;
+      const next = _budgetInput === '0' ? key : _budgetInput + key;
+      if (parseFloat(next) > MAX_AMOUNT) return;
+      _budgetInput = next;
+    }
+
+    const amountEl = document.getElementById('budget-modal-amount');
+    if (amountEl) amountEl.textContent = _budgetInput || '0';
+
+    if (_editingLimit === 'converter') _updateConverterResult();
+  }
+
+  function _saveLimit() {
+    if (!_editingLimit) return;
+
+    if (_editingLimit === 'converter') {
+      const fromEl = document.getElementById('converter-from-amount');
+      if (fromEl) fromEl.textContent = _budgetInput || '0';
+      _updateConverterResult();
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+      _closeModal();
+      return;
+    }
+
+    const amount   = parseFloat(_budgetInput) || 0;
+    const storeKey = { daily: 'dailyLimit', weekly: 'weeklyLimit', monthly: 'monthlyLimit' }[_editingLimit];
+
+    Store.state[storeKey] = amount;
+    _persist(Store.state.dailyLimit, Store.state.weeklyLimit, Store.state.monthlyLimit);
+    _syncToServer();
+
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+    _closeModal();
+  }
+
+  // ── Converter ────────────────────────────────────────────────────────────
+
+  function _updateConverterResult() {
+    const fromSel = document.getElementById('converter-from-currency');
+    const toSel   = document.getElementById('converter-to-currency');
+    const fromEl  = document.getElementById('converter-from-amount');
+    const toEl    = document.getElementById('converter-to-amount');
+    if (!fromSel || !toSel || !toEl) return;
+
+    const fromCode = fromSel.value;
+    const toCode   = toSel.value;
+    const rates    = Store.state.rates || {};
+    const amount   = parseFloat(fromEl ? fromEl.textContent : '0') || 0;
+
+    if (!rates[fromCode] || !rates[toCode] || amount === 0) {
+      toEl.textContent = '0';
+      return;
+    }
+
+    const result = amount / rates[fromCode] * rates[toCode];
+    toEl.textContent = result.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+  }
+
   // ── Init ─────────────────────────────────────────────────────────────────
 
   function init() {
-    // Pre-fill Store from localStorage so sliders show correct values
-    // before the bootstrap response arrives
+    // Pre-fill Store from localStorage before bootstrap arrives
     const local = _load();
     if (local) {
+      if (!Store.state.dailyLimit   && local.dailyLimit)   Store.state.dailyLimit   = local.dailyLimit;
       if (!Store.state.weeklyLimit  && local.weeklyLimit)  Store.state.weeklyLimit  = local.weeklyLimit;
       if (!Store.state.monthlyLimit && local.monthlyLimit) Store.state.monthlyLimit = local.monthlyLimit;
     }
 
-    const weeklySlider   = document.getElementById('weekly-limit');
-    const monthlySlider  = document.getElementById('monthly-limit');
-    const weeklyDisplay  = document.getElementById('weekly-limit-display');
-    const monthlyDisplay = document.getElementById('monthly-limit-display');
+    // ── Currency select ──────────────────────────────────────────────────
+    const currencySelect = document.getElementById('currency-select');
 
-    // Slider → Store (input fires continuously during drag)
-    if (weeklySlider) {
-      weeklySlider.addEventListener('input', () => {
-        Store.state.weeklyLimit = Number(weeklySlider.value);
-      });
-    }
-    if (monthlySlider) {
-      monthlySlider.addEventListener('input', () => {
-        Store.state.monthlyLimit = Number(monthlySlider.value);
-      });
-    }
+    Store.subscribe('currency', (val) => {
+      if (currencySelect && val) currencySelect.value = val;
 
-    // Store → Slider + display (handles server updates from bootstrap too)
-    Store.subscribe('weeklyLimit', (val) => {
-      if (weeklySlider)  weeklySlider.value = val || 0;
-      if (weeklyDisplay && typeof formatCurrency === 'function') {
-        weeklyDisplay.textContent = formatCurrency(val || 0, Store.state.currency);
+      // Update modal currency symbol if currently open
+      const curEl = document.getElementById('budget-modal-currency');
+      if (curEl) {
+        curEl.textContent = typeof getCurrencySymbol === 'function'
+          ? getCurrencySymbol(val)
+          : (val || '₽');
       }
-      _persist(val, Store.state.monthlyLimit);
-      _syncToServer(val, Store.state.monthlyLimit);
+
+      // Keep converter from-currency in sync with main currency
+      const fromSel = document.getElementById('converter-from-currency');
+      if (fromSel && val) fromSel.value = val;
+
+      _refreshLimitDisplays();
+      renderProgressBars();
+      _updateConverterResult();
+    });
+
+    if (currencySelect) {
+      currencySelect.addEventListener('change', () => {
+        const newCurrency = currencySelect.value;
+        const oldCurrency = Store.state.currency || 'RUB';
+        const rates       = Store.state.rates    || {};
+        const rateFrom    = rates[oldCurrency];
+        const rateTo      = rates[newCurrency];
+
+        if (oldCurrency !== newCurrency && rateFrom && rateTo) {
+          const factor     = rateTo / rateFrom;
+          const newDaily   = Math.round((Store.state.dailyLimit   || 0) * factor * 100) / 100;
+          const newWeekly  = Math.round((Store.state.weeklyLimit  || 0) * factor * 100) / 100;
+          const newMonthly = Math.round((Store.state.monthlyLimit || 0) * factor * 100) / 100;
+          Store.batchUpdate({ currency: newCurrency, dailyLimit: newDaily, weeklyLimit: newWeekly, monthlyLimit: newMonthly });
+          _persist(newDaily, newWeekly, newMonthly);
+        } else {
+          Store.state.currency = newCurrency;
+        }
+
+        _syncToServer();
+        window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.();
+      });
+    }
+
+    // ── Limit tap buttons ────────────────────────────────────────────────
+    document.querySelectorAll('.limit-value--tap').forEach(btn => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        _openModal(btn.dataset.limit);
+      });
+    });
+
+    // ── Modal controls ───────────────────────────────────────────────────
+    const closeBtn = document.getElementById('budget-modal-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); _closeModal(); });
+    }
+
+    const backdrop = document.querySelector('.budget-modal-backdrop');
+    if (backdrop) {
+      backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); _closeModal(); });
+    }
+
+    const saveBtn = document.getElementById('budget-modal-save');
+    if (saveBtn) {
+      saveBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); _saveLimit(); });
+    }
+
+    // ── Modal numpad (reuses same CSS classes, separate event delegation) ─
+    const modalNumpad = document.querySelector('.numpad--modal');
+    if (modalNumpad) {
+      modalNumpad.addEventListener('pointerdown', (e) => {
+        const key = e.target.closest('[data-key]');
+        if (!key) return;
+        e.preventDefault();
+        key.classList.add('pressed');
+        setTimeout(() => key.classList.remove('pressed'), 120);
+        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+        _handleBudgetKey(key.dataset.key);
+      });
+    }
+
+    // ── Store → limit displays ───────────────────────────────────────────
+    Store.subscribe('dailyLimit', () => {
+      _refreshLimitDisplays();
+      Store.state.dailyAvailable = computeDailyAvailable();
+    });
+
+    Store.subscribe('weeklyLimit', (val) => {
+      _refreshLimitDisplays();
+      _persist(Store.state.dailyLimit, val, Store.state.monthlyLimit);
       Store.state.dailyAvailable = computeDailyAvailable();
       renderProgressBars();
     });
 
     Store.subscribe('monthlyLimit', (val) => {
-      if (monthlySlider)  monthlySlider.value = val || 0;
-      if (monthlyDisplay && typeof formatCurrency === 'function') {
-        monthlyDisplay.textContent = formatCurrency(val || 0, Store.state.currency);
-      }
-      _persist(Store.state.weeklyLimit, val);
-      _syncToServer(Store.state.weeklyLimit, val);
+      _refreshLimitDisplays();
+      _persist(Store.state.dailyLimit, Store.state.weeklyLimit, val);
       Store.state.dailyAvailable = computeDailyAvailable();
       renderProgressBars();
     });
 
-    // Recalculate whenever transactions change (new spend / delete)
     Store.subscribe('transactions', () => {
       Store.state.dailyAvailable = computeDailyAvailable();
       renderProgressBars();
     });
+
+    Store.subscribe('rates', _updateConverterResult);
+
+    // ── Converter widget ─────────────────────────────────────────────────
+    const converterFromBtn = document.getElementById('converter-from-amount');
+    const converterFromSel = document.getElementById('converter-from-currency');
+    const converterToSel   = document.getElementById('converter-to-currency');
+    const converterSwapBtn = document.getElementById('converter-swap');
+
+    // Default converter currencies: from = main currency, to = USD (or RUB if main is USD)
+    if (converterFromSel) converterFromSel.value = Store.state.currency || 'RUB';
+    if (converterToSel) {
+      const main = Store.state.currency || 'RUB';
+      converterToSel.value = main === 'USD' ? 'RUB' : 'USD';
+    }
+
+    if (converterFromBtn) {
+      converterFromBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        _openModal('converter');
+      });
+    }
+
+    if (converterFromSel) converterFromSel.addEventListener('change', _updateConverterResult);
+    if (converterToSel)   converterToSel.addEventListener('change', _updateConverterResult);
+
+    if (converterSwapBtn) {
+      converterSwapBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!converterFromSel || !converterToSel) return;
+        const temp = converterFromSel.value;
+        converterFromSel.value = converterToSel.value;
+        converterToSel.value   = temp;
+        _updateConverterResult();
+        window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.();
+      });
+    }
   }
 
   return { init, computeDailyAvailable, renderProgressBars };

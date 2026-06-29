@@ -341,7 +341,7 @@ function initBindings() {
 
   // Символ валюты
   Store.subscribe('currency', (val) => {
-    if (currencySymbol) currencySymbol.textContent = val || '₽';
+    if (currencySymbol) currencySymbol.textContent = getCurrencySymbol(val);
   });
 
   function updateAddButton() {
@@ -532,11 +532,12 @@ async function bootstrap() {
     const budget = data.budget || {};
 
     Store.batchUpdate({
-      currency:     data.currency         || '₽',
+      currency:     data.currency         || 'RUB',
       dailyLimit:   budget.daily_limit    || 0,
       weeklyLimit:  budget.weekly_limit   || 0,
       monthlyLimit: budget.monthly_limit  || 0,
       categories:   data.categories       || [],
+      rates:        data.rates            || {},
     });
 
     // Recompute daily available now that limits are fresh from server
@@ -552,11 +553,18 @@ async function bootstrap() {
    11. Вспомогательные утилиты
 ═══════════════════════════════════════════════════ */
 
-function formatCurrency(amount, currency = '₽') {
+const CURRENCY_SYMBOLS = { RUB: '₽', GEL: '₾', USD: '$', EUR: '€' };
+
+function getCurrencySymbol(code) {
+  return CURRENCY_SYMBOLS[code] || code || '₽';
+}
+
+function formatCurrency(amount, currencyOrCode = 'RUB') {
   const num = Number(amount);
+  const sym = getCurrencySymbol(currencyOrCode);
   return isNaN(num)
     ? '—'
-    : num.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ' + currency;
+    : num.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ' + sym;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -610,4 +618,4 @@ if (document.readyState === 'loading') {
 }
 
 // Глобальный экспорт для отладки в консоли
-window.App = { Store, Router, StorageManager, SyncRunner, DonutChart, SwipeGesture, Settings, formatCurrency };
+window.App = { Store, Router, StorageManager, SyncRunner, DonutChart, SwipeGesture, Settings, formatCurrency, getCurrencySymbol };

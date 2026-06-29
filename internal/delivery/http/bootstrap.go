@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	repository "github.com/flowmoney/app/internal/repository/postgres"
+	"github.com/flowmoney/app/internal/service"
 )
 
 type categoryResponse struct {
@@ -32,9 +33,10 @@ type bootstrapResponse struct {
 	Currency   string             `json:"currency"`
 	Budget     budgetResponse     `json:"budget"`
 	Categories []categoryResponse `json:"categories"`
+	Rates      map[string]float64 `json:"rates"`
 }
 
-func NewBootstrapHandler(q repository.Querier) http.HandlerFunc {
+func NewBootstrapHandler(q repository.Querier, rm *service.RatesManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tgID, ok := GetTelegramID(r.Context())
 		if !ok {
@@ -84,6 +86,7 @@ func NewBootstrapHandler(q repository.Querier) http.HandlerFunc {
 				MonthlyLimit: numericToFloat64(budget.MonthlyLimit),
 			},
 			Categories: catResp,
+			Rates:      rm.Rates(),
 		}
 
 		w.Header().Set("Content-Type", "application/json")

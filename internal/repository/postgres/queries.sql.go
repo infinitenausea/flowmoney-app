@@ -152,6 +152,46 @@ func (q *Queries) GetAnalyticsDonut(ctx context.Context, userID int64) ([]GetAna
 	return items, nil
 }
 
+const updateUserCurrency = `-- name: UpdateUserCurrency :exec
+UPDATE users SET currency = $2, updated_at = NOW() WHERE tg_id = $1
+`
+
+type UpdateUserCurrencyParams struct {
+	TgID     int64  `json:"tg_id"`
+	Currency string `json:"currency"`
+}
+
+func (q *Queries) UpdateUserCurrency(ctx context.Context, arg UpdateUserCurrencyParams) error {
+	_, err := q.db.Exec(ctx, updateUserCurrency, arg.TgID, arg.Currency)
+	return err
+}
+
+const upsertBudget = `-- name: UpsertBudget :exec
+INSERT INTO budgets (user_id, daily_limit, weekly_limit, monthly_limit)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id) DO UPDATE
+SET daily_limit   = EXCLUDED.daily_limit,
+    weekly_limit  = EXCLUDED.weekly_limit,
+    monthly_limit = EXCLUDED.monthly_limit
+`
+
+type UpsertBudgetParams struct {
+	UserID       int64          `json:"user_id"`
+	DailyLimit   pgtype.Numeric `json:"daily_limit"`
+	WeeklyLimit  pgtype.Numeric `json:"weekly_limit"`
+	MonthlyLimit pgtype.Numeric `json:"monthly_limit"`
+}
+
+func (q *Queries) UpsertBudget(ctx context.Context, arg UpsertBudgetParams) error {
+	_, err := q.db.Exec(ctx, upsertBudget,
+		arg.UserID,
+		arg.DailyLimit,
+		arg.WeeklyLimit,
+		arg.MonthlyLimit,
+	)
+	return err
+}
+
 const getTimelineWithCursor = `-- name: GetTimelineWithCursor :many
 SELECT id, user_id, category_id, amount, created_at, is_deleted
 FROM transactions

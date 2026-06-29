@@ -100,48 +100,105 @@
     </section>
 
     <!-- ═══════════════════════════════════════
-         Экран 3: Настройки / Лимиты
+         Экран 3: Настройки
     ═══════════════════════════════════════ -->
     <section id="screen-settings" class="screen" role="main" aria-hidden="true">
       <div class="screen-content">
-        <h2 class="screen-title">Лимиты</h2>
-        <div class="budget-settings">
+        <h2 class="screen-title">Настройки</h2>
 
-          <div class="budget-setting-block">
-            <div class="budget-setting-header">
-              <span class="budget-setting-label">Недельный лимит</span>
-              <span id="weekly-limit-display" class="limit-value">—</span>
-            </div>
-            <input type="range" id="weekly-limit" min="0" max="100000" step="500" />
-            <div class="budget-progress-wrap">
-              <div class="budget-progress-track">
-                <div id="weekly-progress-bar" class="budget-progress-bar"></div>
-              </div>
-              <div class="budget-progress-meta">
-                <span>Потрачено</span>
-                <span id="weekly-spend-display">—</span>
-              </div>
-            </div>
+        <!-- Валюта -->
+        <div class="settings-section">
+          <h3 class="settings-section-title">Валюта</h3>
+          <div class="currency-select-wrap">
+            <select id="currency-select" class="currency-select" aria-label="Выбор валюты">
+              <option value="RUB">₽ Российский рубль</option>
+              <option value="GEL">₾ Грузинский лари</option>
+              <option value="USD">$ Доллар США</option>
+              <option value="EUR">€ Евро</option>
+            </select>
           </div>
-
-          <div class="budget-setting-block">
-            <div class="budget-setting-header">
-              <span class="budget-setting-label">Месячный лимит</span>
-              <span id="monthly-limit-display" class="limit-value">—</span>
-            </div>
-            <input type="range" id="monthly-limit" min="0" max="500000" step="1000" />
-            <div class="budget-progress-wrap">
-              <div class="budget-progress-track">
-                <div id="monthly-progress-bar" class="budget-progress-bar"></div>
-              </div>
-              <div class="budget-progress-meta">
-                <span>Потрачено</span>
-                <span id="monthly-spend-display">—</span>
-              </div>
-            </div>
-          </div>
-
         </div>
+
+        <!-- Лимиты -->
+        <div class="settings-section">
+          <h3 class="settings-section-title">Лимиты расходов</h3>
+          <div class="budget-settings">
+
+            <div class="budget-setting-block">
+              <div class="budget-setting-header">
+                <span class="budget-setting-label">Дневной лимит</span>
+                <button class="limit-value limit-value--tap" id="daily-limit-display"
+                        data-limit="daily" aria-label="Изменить дневной лимит">—</button>
+              </div>
+            </div>
+
+            <div class="budget-setting-block">
+              <div class="budget-setting-header">
+                <span class="budget-setting-label">Недельный лимит</span>
+                <button class="limit-value limit-value--tap" id="weekly-limit-display"
+                        data-limit="weekly" aria-label="Изменить недельный лимит">—</button>
+              </div>
+              <div class="budget-progress-wrap">
+                <div class="budget-progress-track">
+                  <div id="weekly-progress-bar" class="budget-progress-bar"></div>
+                </div>
+                <div class="budget-progress-meta">
+                  <span>Потрачено</span>
+                  <span id="weekly-spend-display">—</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="budget-setting-block">
+              <div class="budget-setting-header">
+                <span class="budget-setting-label">Месячный лимит</span>
+                <button class="limit-value limit-value--tap" id="monthly-limit-display"
+                        data-limit="monthly" aria-label="Изменить месячный лимит">—</button>
+              </div>
+              <div class="budget-progress-wrap">
+                <div class="budget-progress-track">
+                  <div id="monthly-progress-bar" class="budget-progress-bar"></div>
+                </div>
+                <div class="budget-progress-meta">
+                  <span>Потрачено</span>
+                  <span id="monthly-spend-display">—</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Конвертер -->
+        <div class="settings-section">
+          <h3 class="settings-section-title">Конвертер</h3>
+          <div class="converter-widget">
+            <div class="converter-row">
+              <button class="converter-amount-btn" id="converter-from-amount" aria-label="Сумма для конвертации">0</button>
+              <select class="converter-currency-select" id="converter-from-currency" aria-label="Исходная валюта">
+                <option value="RUB">₽ RUB</option>
+                <option value="GEL">₾ GEL</option>
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+              </select>
+            </div>
+            <button class="converter-swap-btn" id="converter-swap" aria-label="Поменять валюты местами">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/>
+              </svg>
+            </button>
+            <div class="converter-row">
+              <div class="converter-amount-result" id="converter-to-amount" aria-live="polite">0</div>
+              <select class="converter-currency-select" id="converter-to-currency" aria-label="Целевая валюта">
+                <option value="RUB">₽ RUB</option>
+                <option value="GEL">₾ GEL</option>
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -176,6 +233,49 @@
     </nav>
 
   </div><!-- /#app -->
+
+  <!-- ═══════════════════════════════════════
+       Шторка: ввод лимита бюджета
+  ═══════════════════════════════════════ -->
+  <div id="budget-modal" class="budget-modal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="budget-modal-backdrop"></div>
+    <div class="budget-modal-sheet">
+      <div class="budget-modal-handle"></div>
+      <div class="budget-modal-header">
+        <span id="budget-modal-title" class="budget-modal-title">Лимит</span>
+        <button id="budget-modal-close" class="budget-modal-close" aria-label="Закрыть">✕</button>
+      </div>
+      <div class="budget-modal-display">
+        <span id="budget-modal-amount" class="budget-modal-amount">0</span>
+        <span id="budget-modal-currency" class="budget-modal-currency">₽</span>
+      </div>
+      <!-- Нампад переиспользует те же CSS-классы; логика в settings.js -->
+      <div class="numpad numpad--modal" role="group" aria-label="Цифровая клавиатура">
+        <button class="numpad-key" data-key="7">7</button>
+        <button class="numpad-key" data-key="8">8</button>
+        <button class="numpad-key" data-key="9">9</button>
+
+        <button class="numpad-key" data-key="4">4</button>
+        <button class="numpad-key" data-key="5">5</button>
+        <button class="numpad-key" data-key="6">6</button>
+
+        <button class="numpad-key" data-key="1">1</button>
+        <button class="numpad-key" data-key="2">2</button>
+        <button class="numpad-key" data-key="3">3</button>
+
+        <button class="numpad-key" data-key=".">.</button>
+        <button class="numpad-key" data-key="0">0</button>
+        <button class="numpad-key numpad-key--action" data-key="backspace" aria-label="Удалить">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
+            <line x1="18" y1="9" x2="12" y2="15"/>
+            <line x1="12" y1="9" x2="18" y2="15"/>
+          </svg>
+        </button>
+      </div>
+      <button id="budget-modal-save" class="btn-save-limit">Сохранить</button>
+    </div>
+  </div>
 
   <script src="js/store.js"></script>
   <script src="js/storage.js"></script>

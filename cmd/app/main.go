@@ -17,6 +17,7 @@ import (
 	"github.com/flowmoney/app/internal/config"
 	deliveryhttp "github.com/flowmoney/app/internal/delivery/http"
 	repository "github.com/flowmoney/app/internal/repository/postgres"
+	"github.com/flowmoney/app/internal/service"
 )
 
 func main() {
@@ -25,21 +26,28 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// App-level context — cancelled on graceful shutdown to stop background goroutines.
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer dbCancel()
+
+	pool, err := pgxpool.New(dbCtx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to create db pool: %v", err)
 	}
 	defer pool.Close()
 
-	if err := pool.Ping(ctx); err != nil {
+	if err := pool.Ping(dbCtx); err != nil {
 		log.Fatalf("failed to ping database: %v", err)
 	}
 	log.Println("database connection established")
 
 	queries := repository.New(pool)
+
+	rm := service.NewRatesManager()
+	rm.Start(appCtx)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -53,8 +61,9 @@ func main() {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(deliveryhttp.TelegramAuth(cfg.BotToken))
-		r.Get("/bootstrap", deliveryhttp.NewBootstrapHandler(queries))
+		r.Get("/bootstrap", deliveryhttp.NewBootstrapHandler(queries, rm))
 		r.Post("/sync", deliveryhttp.NewSyncHandler(pool))
+		r.Put("/settings", deliveryhttp.NewSettingsHandler(queries))
 		r.Get("/analytics/donut", deliveryhttp.NewGetAnalyticsDonutHandler(queries))
 		r.Get("/analytics/timeline", deliveryhttp.NewGetTimelineHandler(queries))
 	})
@@ -97,6 +106,7 @@ func main() {
 
 	<-quit
 	log.Println("shutting down...")
+	appCancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

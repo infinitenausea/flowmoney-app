@@ -41,3 +41,14 @@ ON CONFLICT (id) DO UPDATE
 SET category_id = EXCLUDED.category_id,
     amount      = EXCLUDED.amount,
     is_deleted  = EXCLUDED.is_deleted;
+
+-- name: UpdateUserCurrency :exec
+UPDATE users SET currency = $2, updated_at = NOW() WHERE tg_id = $1;
+
+-- name: UpsertBudget :exec
+INSERT INTO budgets (user_id, daily_limit, weekly_limit, monthly_limit)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id) DO UPDATE
+SET daily_limit   = EXCLUDED.daily_limit,
+    weekly_limit  = EXCLUDED.weekly_limit,
+    monthly_limit = EXCLUDED.monthly_limit;
