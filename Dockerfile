@@ -16,6 +16,6 @@ WORKDIR /app
 
 COPY --from=builder /flowmoney .
 
-EXPOSE 8080
+EXPOSE 8082
 
 ENTRYPOINT ["/app/flowmoney"]

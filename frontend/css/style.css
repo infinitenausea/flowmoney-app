@@ -471,28 +471,95 @@ button {
 }
 
 /* ═══════════════════════════════════════════════════
-   Аналитика
+   Аналитика — Donut Chart
 ═══════════════════════════════════════════════════ */
 
 .donut-container {
-  display: flex;
-  justify-content: center;
-  padding: 16px 0;
+  padding: 8px 0 16px;
 }
 
-#donut-canvas {
-  max-width: 220px;
-  max-height: 220px;
+.donut-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
 }
+
+.donut-svg {
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+  /* Hardware-accelerated layer for smooth segment transitions */
+  will-change: transform;
+}
+
+.donut-segment {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.donut-legend {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+
+.donut-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.donut-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.donut-legend-name {
+  font-size: 13px;
+  color: var(--text-color);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donut-legend-pct {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hint-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.donut-empty {
+  text-align: center;
+  color: var(--hint-color);
+  font-size: 14px;
+  padding: 40px 0;
+}
+
+/* ═══════════════════════════════════════════════════
+   Аналитика — Timeline
+═══════════════════════════════════════════════════ */
 
 .timeline {
   display: flex;
   flex-direction: column;
-  gap: 0;
+}
+
+.timeline-empty {
+  text-align: center;
+  color: var(--hint-color);
+  font-size: 14px;
+  padding: 32px 0;
 }
 
 .timeline-day-group {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .timeline-day-label {
@@ -504,15 +571,47 @@ button {
   padding: 12px 0 6px;
 }
 
+/* Outer container: clipping box for swipe reveal */
 .timeline-item {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
+}
+
+/* Inner flex row — this is what slides on swipe */
+.timeline-item-content {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
+  background: var(--bg-color);
   position: relative;
-  overflow: hidden;
-  touch-action: pan-y;
+  z-index: 1;
+  will-change: transform;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Delete action panel — sits behind the content, revealed on left-swipe */
+.swipe-action-delete {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 130px;
+  background: var(--danger-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateX(40%);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .timeline-item-icon {
@@ -535,6 +634,9 @@ button {
   font-size: 15px;
   font-weight: 500;
   color: var(--text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timeline-item-time {
@@ -550,13 +652,13 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* Пиктограмма ожидания синхронизации */
+/* Pending-sync indicator dot */
 .sync-pending {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--hint-color);
-  margin-left: 6px;
+  margin-left: 4px;
   flex-shrink: 0;
   animation: pulse 1.5s infinite ease-in-out;
 }
@@ -573,26 +675,62 @@ button {
 .budget-settings {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 32px;
 }
 
-.budget-setting-row {
+.budget-setting-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  cursor: default;
+  gap: 12px;
 }
 
-.budget-setting-row span:first-child {
+.budget-setting-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.budget-setting-label {
   font-size: 15px;
   font-weight: 500;
   color: var(--text-color);
 }
 
 .limit-value {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--accent-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.budget-progress-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--text-color) 10%, transparent);
+  overflow: hidden;
+}
+
+.budget-progress-bar {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--success-color);
+  width: 0%;
+  transition: width 0.4s cubic-bezier(0.4,0,0.2,1), background 0.4s ease;
+  will-change: width;
+}
+
+.budget-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--hint-color);
 }
 
 input[type="range"] {

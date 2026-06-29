@@ -30,9 +30,9 @@
 * [x] **4.3. Очередь синхронизации (Background Sync):** `sync.js` — воркер с интервалом 15 с + `window.addEventListener('online')`. UI не блокируется при ошибках сети[cite: 2].
 
 ### Этап 5: Аналитика, Свайпы и Настройки
-* [ ] **5.1. Нативный SVG-Donut:** Отрисовка графиков без библиотек + фильтрация по тапу[cite: 2].
-* [ ] **5.2. Touch-трекер для свайпов:** Реализация физики удаления свайпом влево (`Soft delete`) и дублирования свайпом вправо[cite: 1, 2].
-* [ ] **5.3. Настройки бюджетов:** `<input type="range">` контроллеры и синхронизация лимитов с бэкендом[cite: 2].
+* [x] **5.1. Нативный SVG-Donut:** `js/charts.js` — stroke-dasharray donut без библиотек; тап по сектору фильтрует таймлайн через Store[cite: 2].
+* [x] **5.2. Touch-трекер для свайпов:** `js/gestures.js` — pointer-event delegation; свайп влево (мягкое удаление + коллапс), вправо (дублирование); физика сопротивления у краев; iOS WebKit safe[cite: 1, 2].
+* [x] **5.3. Настройки бюджетов:** `js/settings.js` — слайдеры → Store → localStorage → best-effort PUT /api/v1/budgets; прогресс-бары недели/месяца; `dailyAvailable` вычисляется локально[cite: 2].
 
 ---
 
@@ -40,3 +40,4 @@
 * *Сессия 0 (Инициализация каркаса):* Claude 3.5 Sonnet (Medium Effort). Затраты: Минимальные. Результат: 100% чистая компиляция.
 * *Сессия 1 (Этап 3 — Frontend Skeleton):* Claude Sonnet 4.6. Создан `frontend/` (index.html, css/style.css, js/store.js, js/app.js). Proxy-реактивность протестирована (3/3 assertions pass). HTTP-сервер запущен на :8080.
 * *Сессия 2 (Этап 4 — Offline-First):* Claude Sonnet 4.6. Созданы `js/storage.js` и `js/sync.js`. Машина состояний транзакций: `_pending: true` → `synced: true`. NumPad лимит 999999. `handleAddTransaction` переведён на `StorageManager`.
+* *Сессия 3 (Этап 5 — Analytics, Swipes, Settings):* Claude Sonnet 4.6. Созданы `js/charts.js`, `js/gestures.js`, `js/settings.js`. Исправлен парсинг bootstrap-ответа (data.budget.*). `dailyAvailable` вычисляется клиентски через Settings.computeDailyAvailable(). Слайдерные биндинги перенесены из app.js в settings.js.

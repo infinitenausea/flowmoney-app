@@ -79,6 +79,9 @@ const Router = (() => {
     const prevTab = currentTab;
     currentTab = tabId;
 
+    // Expose current tab to Store so analytics can react
+    Store.state.currentTab = tabId;
+
     // Haptic Feedback на переключение вкладок (спека 3.1)
     tg?.HapticFeedback?.impactOccurred('light');
 
@@ -108,7 +111,7 @@ const Router = (() => {
   }
 
   function init() {
-    // Слушаем pointerdown для мгновенного отклика (спека 3.1)
+    Store.state.currentTab = currentTab; // set initial value for subscribers
     tabs.forEach(tab => {
       tab.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -305,33 +308,6 @@ function initBindings() {
     });
   }
 
-  // Слайдеры лимитов (Экран 3)
-  const weeklySlider  = document.getElementById('weekly-limit');
-  const monthlySlider = document.getElementById('monthly-limit');
-  const weeklyDisplay  = document.getElementById('weekly-limit-display');
-  const monthlyDisplay = document.getElementById('monthly-limit-display');
-
-  if (weeklySlider) {
-    weeklySlider.addEventListener('input', () => {
-      Store.state.weeklyLimit = Number(weeklySlider.value);
-      if (weeklyDisplay) weeklyDisplay.textContent = formatCurrency(weeklySlider.value, Store.state.currency);
-    });
-    Store.subscribe('weeklyLimit', (val) => {
-      weeklySlider.value = val || 0;
-      if (weeklyDisplay) weeklyDisplay.textContent = formatCurrency(val || 0, Store.state.currency);
-    });
-  }
-
-  if (monthlySlider) {
-    monthlySlider.addEventListener('input', () => {
-      Store.state.monthlyLimit = Number(monthlySlider.value);
-      if (monthlyDisplay) monthlyDisplay.textContent = formatCurrency(monthlySlider.value, Store.state.currency);
-    });
-    Store.subscribe('monthlyLimit', (val) => {
-      monthlySlider.value = val || 0;
-      if (monthlyDisplay) monthlyDisplay.textContent = formatCurrency(val || 0, Store.state.currency);
-    });
-  }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -367,7 +343,113 @@ function handleAddTransaction() {
 }
 
 /* ═══════════════════════════════════════════════════
-   8. Online/Offline статус
+   8. Аналитика — загрузка и рендер
+═══════════════════════════════════════════════════ */
+
+async function loadAnalyticsData() {
+  const cats   = Store.state.categories;
+  const catMap = {};
+  cats.forEach(c => { catMap[c.id] = c; });
+
+  // Try to load server-aggregated donut (accurate monthly totals)
+  if (Store.state.isOnline) {
+    try {
+      const initData = tg?.initData || '';
+      const res = await fetch('/api/v1/analytics/donut', {
+        headers: { 'Authorization': `Telegram ${initData}` },
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const enriched = (raw || []).map(item => ({
+          ...item,
+          name:  catMap[item.category_id]?.name  || item.category_id,
+          color: catMap[item.category_id]?.color || '#888888',
+          icon:  catMap[item.category_id]?.icon  || '💰',
+        }));
+        DonutChart.renderDonutChart('donut-container', enriched);
+        renderTimelineFromStore();
+        return;
+      }
+    } catch (e) {
+      console.warn('[Analytics] donut fetch failed, falling back to local:', e.message);
+    }
+  }
+
+  // Offline fallback: aggregate from local transactions
+  _renderLocalDonut(catMap);
+  renderTimelineFromStore();
+}
+
+function _renderLocalDonut(catMapArg) {
+  const cats   = Store.state.categories;
+  const catMap = catMapArg || {};
+  if (!catMapArg) cats.forEach(c => { catMap[c.id] = c; });
+
+  const now   = new Date();
+  const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const totals = {};
+
+  (Store.state.transactions || [])
+    .filter(tx => !tx.is_deleted && new Date(tx.created_at) >= mStart)
+    .forEach(tx => { totals[tx.category_id] = (totals[tx.category_id] || 0) + Number(tx.amount); });
+
+  const data = Object.entries(totals).map(([catId, total]) => ({
+    category_id: catId,
+    total,
+    name:  catMap[catId]?.name  || catId,
+    color: catMap[catId]?.color || '#888888',
+    icon:  catMap[catId]?.icon  || '💰',
+  }));
+
+  DonutChart.renderDonutChart('donut-container', data);
+}
+
+function renderTimelineFromStore() {
+  const filterCat = Store.state.selectedAnalyticsCategory;
+  let txs = Store.state.transactions || [];
+  if (filterCat) txs = txs.filter(tx => tx.category_id === filterCat);
+  DonutChart.renderTimeline('timeline', txs, Store.state.categories);
+}
+
+function initAnalytics() {
+  // Load analytics data the first time the analytics tab is opened
+  Store.subscribe('currentTab', (tab) => {
+    if (tab === 'analytics') loadAnalyticsData();
+  });
+
+  // Re-render timeline when category filter changes (tap on donut segment)
+  Store.subscribe('selectedAnalyticsCategory', () => {
+    if (Store.state.currentTab === 'analytics') renderTimelineFromStore();
+  });
+
+  // Refresh timeline when local transactions change (add / delete / sync)
+  Store.subscribe('transactions', () => {
+    if (Store.state.currentTab === 'analytics') renderTimelineFromStore();
+  });
+
+  // Wire up swipe gestures once on the persistent container
+  const timelineEl = document.getElementById('timeline');
+  SwipeGesture.init(timelineEl, {
+    onDelete(txId) {
+      StorageManager.deleteLocally(txId);
+      SyncRunner.syncWithBackend();
+    },
+    onDuplicate(txId) {
+      const tx = (Store.state.transactions || []).find(t => t.id === txId);
+      if (!tx) return;
+      StorageManager.saveTransactionLocally({
+        category_id: tx.category_id,
+        amount:      tx.amount,
+        created_at:  new Date().toISOString(),
+      });
+      SyncRunner.syncWithBackend();
+      // renderTimelineFromStore() will fire automatically via the transactions subscriber
+    },
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   9. Online/Offline статус
 ═══════════════════════════════════════════════════ */
 
 function initNetworkWatcher() {
@@ -376,7 +458,7 @@ function initNetworkWatcher() {
 }
 
 /* ═══════════════════════════════════════════════════
-   9. Bootstrap — загрузка начального стейта с бэкенда
+   10. Bootstrap — загрузка начального стейта с бэкенда
 ═══════════════════════════════════════════════════ */
 
 async function bootstrap() {
@@ -392,16 +474,19 @@ async function bootstrap() {
 
     if (!res.ok) throw new Error(`bootstrap: ${res.status}`);
 
-    const data = await res.json();
+    const data   = await res.json();
+    const budget = data.budget || {};
 
     Store.batchUpdate({
-      currency:       data.currency      || '₽',
-      dailyAvailable: data.daily_available,
-      dailyLimit:     data.daily_limit   || 0,
-      weeklyLimit:    data.weekly_limit  || 0,
-      monthlyLimit:   data.monthly_limit || 0,
-      categories:     data.categories   || [],
+      currency:     data.currency         || '₽',
+      dailyLimit:   budget.daily_limit    || 0,
+      weeklyLimit:  budget.weekly_limit   || 0,
+      monthlyLimit: budget.monthly_limit  || 0,
+      categories:   data.categories       || [],
     });
+
+    // Recompute daily available now that limits are fresh from server
+    Store.state.dailyAvailable = Settings.computeDailyAvailable();
 
   } catch (err) {
     // Offline-first: не блокируем UI, работаем с локальным состоянием
@@ -410,7 +495,7 @@ async function bootstrap() {
 }
 
 /* ═══════════════════════════════════════════════════
-   10. Вспомогательные утилиты
+   11. Вспомогательные утилиты
 ═══════════════════════════════════════════════════ */
 
 function formatCurrency(amount, currency = '₽') {
@@ -421,7 +506,7 @@ function formatCurrency(amount, currency = '₽') {
 }
 
 /* ═══════════════════════════════════════════════════
-   11. Инициализация приложения
+   12. Инициализация приложения
 ═══════════════════════════════════════════════════ */
 
 function hideSkeleton() {
@@ -441,14 +526,16 @@ function hideSkeleton() {
 }
 
 async function init() {
-  // Порядок важен: SDK → тема → хранилище → DOM-биндинги → роутер → данные
+  // Порядок: SDK → тема → хранилище → биндинги → роутер → аналитика → данные
   initTelegram();
   initTheme();
-  StorageManager.init();    // Загружаем транзакции из localStorage до рендера
+  StorageManager.init();    // загружаем транзакции из localStorage до рендера
+  Settings.init();          // слайдеры лимитов + daily available
   initBindings();
   Router.init();
   NumPad.init();
   CategoryCarousel.init();
+  initAnalytics();          // свайпы + подписки вкладки аналитики
   initNetworkWatcher();
 
   // Показываем скелет минимум 400ms для плавности, потом грузим данные
@@ -458,7 +545,7 @@ async function init() {
   ]);
 
   hideSkeleton();
-  SyncRunner.start();       // Запускаем фоновый воркер синхронизации
+  SyncRunner.start();       // запускаем фоновый воркер синхронизации
 }
 
 // Запуск после загрузки DOM
@@ -469,4 +556,4 @@ if (document.readyState === 'loading') {
 }
 
 // Глобальный экспорт для отладки в консоли
-window.App = { Store, Router, StorageManager, SyncRunner, formatCurrency };
+window.App = { Store, Router, StorageManager, SyncRunner, DonutChart, SwipeGesture, Settings, formatCurrency };

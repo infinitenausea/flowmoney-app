@@ -1,0 +1,52 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy via SSH
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+
+            cd ${{ secrets.PROJECT_PATH }}
+
+            echo "→ Pulling latest changes..."
+            git pull origin main
+
+            echo "→ Rebuilding and restarting containers..."
+            docker compose up -d --build --remove-orphans
+
+            echo "→ Running database migrations..."
+            # Migrations are plain SQL files — apply new ones via psql inside the postgres container.
+            # Only files not yet tracked as applied are run (idempotent: each file is applied once).
+            for f in migrations/*.up.sql; do
+              docker compose exec -T postgres psql \
+                -U "$DB_USER" \
+                -d "$DB_NAME" \
+                -c "CREATE TABLE IF NOT EXISTS _schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
+              applied=$(docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" -tAc \
+                "SELECT COUNT(*) FROM _schema_migrations WHERE filename = '$(basename $f)';")
+              if [ "$applied" = "0" ]; then
+                echo "  Applying migration: $f"
+                docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" < "$f"
+                docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" \
+                  -c "INSERT INTO _schema_migrations (filename) VALUES ('$(basename $f)');"
+              else
+                echo "  Skipping already applied: $f"
+              fi
+            done
+
+            echo "✓ Deploy complete."

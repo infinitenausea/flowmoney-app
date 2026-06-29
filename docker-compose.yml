@@ -21,7 +21,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      PORT: 8080
+      PORT: 8082
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER}
@@ -30,7 +30,7 @@ services:
       DB_SSLMODE: disable
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
     ports:
-      - "8080:8080"
+      - "8082:8082"
 
 volumes:
   postgres_data:

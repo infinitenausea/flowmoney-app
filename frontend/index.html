@@ -105,18 +105,42 @@
     <section id="screen-settings" class="screen" role="main" aria-hidden="true">
       <div class="screen-content">
         <h2 class="screen-title">Лимиты</h2>
-        <!-- Бюджетные слайдеры — Этап 5 -->
         <div class="budget-settings">
-          <label class="budget-setting-row">
-            <span>Недельный лимит</span>
+
+          <div class="budget-setting-block">
+            <div class="budget-setting-header">
+              <span class="budget-setting-label">Недельный лимит</span>
+              <span id="weekly-limit-display" class="limit-value">—</span>
+            </div>
             <input type="range" id="weekly-limit" min="0" max="100000" step="500" />
-            <span id="weekly-limit-display" class="limit-value">—</span>
-          </label>
-          <label class="budget-setting-row">
-            <span>Месячный лимит</span>
+            <div class="budget-progress-wrap">
+              <div class="budget-progress-track">
+                <div id="weekly-progress-bar" class="budget-progress-bar"></div>
+              </div>
+              <div class="budget-progress-meta">
+                <span>Потрачено</span>
+                <span id="weekly-spend-display">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="budget-setting-block">
+            <div class="budget-setting-header">
+              <span class="budget-setting-label">Месячный лимит</span>
+              <span id="monthly-limit-display" class="limit-value">—</span>
+            </div>
             <input type="range" id="monthly-limit" min="0" max="500000" step="1000" />
-            <span id="monthly-limit-display" class="limit-value">—</span>
-          </label>
+            <div class="budget-progress-wrap">
+              <div class="budget-progress-track">
+                <div id="monthly-progress-bar" class="budget-progress-bar"></div>
+              </div>
+              <div class="budget-progress-meta">
+                <span>Потрачено</span>
+                <span id="monthly-spend-display">—</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
@@ -156,6 +180,9 @@
   <script src="js/store.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/sync.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/gestures.js"></script>
+  <script src="js/settings.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
