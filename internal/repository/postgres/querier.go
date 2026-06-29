@@ -7,6 +7,7 @@ import "context"
 type Querier interface {
 	GetBudgetsByUserId(ctx context.Context, userID int64) (Budget, error)
 	GetCategoriesByUserId(ctx context.Context, userID int64) ([]Category, error)
+	UpsertTransaction(ctx context.Context, arg UpsertTransactionParams) error
 	UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error)
 }
 

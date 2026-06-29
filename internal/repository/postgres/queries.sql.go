@@ -3,7 +3,11 @@
 
 package repository
 
-import "context"
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
 
 const upsertUser = `-- name: UpsertUser :one
 INSERT INTO users (tg_id, currency, created_at, updated_at)
@@ -81,4 +85,34 @@ func (q *Queries) GetCategoriesByUserId(ctx context.Context, userID int64) ([]Ca
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertTransaction = `-- name: UpsertTransaction :exec
+INSERT INTO transactions (id, user_id, category_id, amount, created_at, is_deleted)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO UPDATE
+SET category_id = EXCLUDED.category_id,
+    amount      = EXCLUDED.amount,
+    is_deleted  = EXCLUDED.is_deleted
+`
+
+type UpsertTransactionParams struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     int64              `json:"user_id"`
+	CategoryID pgtype.UUID        `json:"category_id"`
+	Amount     pgtype.Numeric     `json:"amount"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	IsDeleted  bool               `json:"is_deleted"`
+}
+
+func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionParams) error {
+	_, err := q.db.Exec(ctx, upsertTransaction,
+		arg.ID,
+		arg.UserID,
+		arg.CategoryID,
+		arg.Amount,
+		arg.CreatedAt,
+		arg.IsDeleted,
+	)
+	return err
 }

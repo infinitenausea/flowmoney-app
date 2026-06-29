@@ -27,3 +27,12 @@ type Budget struct {
 	WeeklyLimit  pgtype.Numeric `json:"weekly_limit"`
 	MonthlyLimit pgtype.Numeric `json:"monthly_limit"`
 }
+
+type Transaction struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     int64              `json:"user_id"`
+	CategoryID pgtype.UUID        `json:"category_id"`
+	Amount     pgtype.Numeric     `json:"amount"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	IsDeleted  bool               `json:"is_deleted"`
+}

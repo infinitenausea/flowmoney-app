@@ -54,6 +54,7 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(deliveryhttp.TelegramAuth(cfg.BotToken))
 		r.Get("/bootstrap", deliveryhttp.NewBootstrapHandler(queries))
+		r.Post("/sync", deliveryhttp.NewSyncHandler(pool))
 	})
 
 	srv := &http.Server{
