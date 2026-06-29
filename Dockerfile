@@ -15,6 +15,7 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /flowmoney .
+COPY --from=builder /app/frontend ./frontend
 
 EXPOSE 8082
 
