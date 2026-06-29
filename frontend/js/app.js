@@ -125,8 +125,9 @@ const Router = (() => {
 ═══════════════════════════════════════════════════ */
 
 const NumPad = (() => {
-  const MAX_DIGITS = 10;
-  const MAX_DECIMALS = 2;
+  const MAX_DIGITS    = 6;   // 999999 — шесть цифр до запятой
+  const MAX_DECIMALS  = 2;
+  const MAX_AMOUNT    = 999999;
 
   function init() {
     const numpad = document.querySelector('.numpad');
@@ -169,12 +170,10 @@ const NumPad = (() => {
     if (parts[0].length >= MAX_DIGITS && !current.includes('.')) return;
     if (parts[1] !== undefined && parts[1].length >= MAX_DECIMALS) return;
 
-    // Убираем ведущий ноль
-    if (current === '0') {
-      Store.state.inputAmount = key;
-    } else {
-      Store.state.inputAmount = current + key;
-    }
+    // Убираем ведущий ноль, затем проверяем лимит 999999
+    const newValue = current === '0' ? key : current + key;
+    if (parseFloat(newValue) > MAX_AMOUNT) return;
+    Store.state.inputAmount = newValue;
   }
 
   return { init };
@@ -340,21 +339,16 @@ function initBindings() {
 ═══════════════════════════════════════════════════ */
 
 function handleAddTransaction() {
-  const amount   = parseFloat(Store.state.inputAmount);
-  const catId    = Store.state.selectedCategory;
+  const amount = parseFloat(Store.state.inputAmount);
+  const catId  = Store.state.selectedCategory;
   if (!amount || !catId) return;
 
-  const tx = {
-    id:          crypto.randomUUID(),
+  // Сохраняем локально — StorageManager сам обновит Store (оптимистичный апдейт)
+  const tx = StorageManager.saveTransactionLocally({
     category_id: catId,
     amount,
     created_at:  new Date().toISOString(),
-    _pending:    true,
-  };
-
-  // Оптимистичный апдейт: сразу в стор
-  const current = Store.state.transactions;
-  Store.state.transactions = [tx, ...current];
+  });
 
   // Сбрасываем ввод
   Store.state.inputAmount      = '';
@@ -366,10 +360,10 @@ function handleAddTransaction() {
     el.setAttribute('aria-selected', 'false');
   });
 
-  // Добавляем в очередь синхронизации (Этап 4)
-  Store.state.pendingSync = [...Store.state.pendingSync, tx];
+  console.info('[App] Transaction saved locally:', tx.id);
 
-  console.info('[App] Transaction added:', tx);
+  // Внеочередная попытка синхронизации (не блокирует UI)
+  SyncRunner.syncWithBackend();
 }
 
 /* ═══════════════════════════════════════════════════
@@ -447,9 +441,10 @@ function hideSkeleton() {
 }
 
 async function init() {
-  // Порядок важен: SDK → тема → DOM-биндинги → роутер → данные
+  // Порядок важен: SDK → тема → хранилище → DOM-биндинги → роутер → данные
   initTelegram();
   initTheme();
+  StorageManager.init();    // Загружаем транзакции из localStorage до рендера
   initBindings();
   Router.init();
   NumPad.init();
@@ -457,12 +452,13 @@ async function init() {
   initNetworkWatcher();
 
   // Показываем скелет минимум 400ms для плавности, потом грузим данные
-  const [data] = await Promise.all([
+  await Promise.all([
     bootstrap(),
     new Promise(r => setTimeout(r, 400)),
   ]);
 
   hideSkeleton();
+  SyncRunner.start();       // Запускаем фоновый воркер синхронизации
 }
 
 // Запуск после загрузки DOM
@@ -473,4 +469,4 @@ if (document.readyState === 'loading') {
 }
 
 // Глобальный экспорт для отладки в консоли
-window.App = { Store, Router, formatCurrency };
+window.App = { Store, Router, StorageManager, SyncRunner, formatCurrency };

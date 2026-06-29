@@ -25,9 +25,9 @@
 * [x] **3.3. Реактивный Store:** Реализация Vanilla JS Store на базе `Proxy` для точечных мутаций DOM[cite: 2].
 
 ### Этап 4: Экраны ввода и Offline-First хранилище (Фронтенд)
-* [ ] **4.1. Главный экран & Кастомный NumPad:** Верстка интерфейса ввода, блокировка системной клавиатуры, Haptic Feedback на `pointerdown`[cite: 2].
-* [ ] **4.2. Local Storage Manager:** Слой сохранения транзакций в локальную БД смартфона с отметками синхронизации[cite: 2].
-* [ ] **4.3. Очередь синхронизации (Background Sync):** Фоновый воркер, отправляющий локальные пакеты данных на `/api/v1/sync` при наличии сети[cite: 2].
+* [x] **4.1. Главный экран & Кастомный NumPad:** Верстка интерфейса ввода, блокировка системной клавиатуры, Haptic Feedback на `pointerdown`[cite: 2]. Лимит суммы 999999, защита от двойной точки и ведущего нуля.
+* [x] **4.2. Local Storage Manager:** `storage.js` — `saveTransactionLocally`, `getUnsyncedTransactions`, `markAsSynced`, `deleteLocally`. UUID v4 генерируется на клиенте через `self.crypto.randomUUID()`[cite: 2].
+* [x] **4.3. Очередь синхронизации (Background Sync):** `sync.js` — воркер с интервалом 15 с + `window.addEventListener('online')`. UI не блокируется при ошибках сети[cite: 2].
 
 ### Этап 5: Аналитика, Свайпы и Настройки
 * [ ] **5.1. Нативный SVG-Donut:** Отрисовка графиков без библиотек + фильтрация по тапу[cite: 2].
@@ -39,3 +39,4 @@
 ## 📈 Лог токен-затрат (Token-Saving Ledger)
 * *Сессия 0 (Инициализация каркаса):* Claude 3.5 Sonnet (Medium Effort). Затраты: Минимальные. Результат: 100% чистая компиляция.
 * *Сессия 1 (Этап 3 — Frontend Skeleton):* Claude Sonnet 4.6. Создан `frontend/` (index.html, css/style.css, js/store.js, js/app.js). Proxy-реактивность протестирована (3/3 assertions pass). HTTP-сервер запущен на :8080.
+* *Сессия 2 (Этап 4 — Offline-First):* Claude Sonnet 4.6. Созданы `js/storage.js` и `js/sync.js`. Машина состояний транзакций: `_pending: true` → `synced: true`. NumPad лимит 999999. `handleAddTransaction` переведён на `StorageManager`.
