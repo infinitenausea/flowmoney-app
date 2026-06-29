@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+env:
+  PROJECT_PATH: /root/flowmoney-app
+
 jobs:
   deploy:
     name: Deploy via SSH
@@ -17,11 +20,12 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
+          port: 22
+          envs: PROJECT_PATH
           script: |
             set -e
 
-            cd ${{ secrets.PROJECT_PATH }}
+            cd "$PROJECT_PATH"
 
             echo "→ Pulling latest changes..."
             git pull origin main
