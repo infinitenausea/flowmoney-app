@@ -59,6 +59,24 @@ func main() {
 		r.Get("/analytics/timeline", deliveryhttp.NewGetTimelineHandler(queries))
 	})
 
+	// Раздаём SPA из ./frontend/; все неизвестные пути отдают index.html
+	frontendDir := http.Dir("./frontend")
+	fileServer := http.FileServer(frontendDir)
+	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+		// Если файл существует — отдаём его; иначе отдаём index.html для SPA-роутинга
+		path := r.URL.Path
+		if path != "/" {
+			f, err := frontendDir.Open(path)
+			if err == nil {
+				f.Close()
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+		r.URL.Path = "/"
+		fileServer.ServeHTTP(w, r)
+	})
+
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      r,
