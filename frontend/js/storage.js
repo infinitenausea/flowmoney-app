@@ -8,6 +8,19 @@
 
 const STORAGE_KEY = 'flowmoney_transactions';
 
+// One-time migration: converts legacy string category IDs (used before UUID system categories
+// were introduced) to the stable UUIDs defined in migration 000002_seed_system_categories.
+const LEGACY_CATEGORY_ID_MAP = {
+  'food':      '11111111-1111-1111-1111-111111111101',
+  'transport': '11111111-1111-1111-1111-111111111102',
+  'shopping':  '11111111-1111-1111-1111-111111111103',
+  'health':    '11111111-1111-1111-1111-111111111104',
+  'cafe':      '11111111-1111-1111-1111-111111111105',
+  'sport':     '11111111-1111-1111-1111-111111111106',
+  'home':      '11111111-1111-1111-1111-111111111107',
+  'other':     '11111111-1111-1111-1111-111111111108',
+};
+
 const StorageManager = (() => {
   let _transactions = [];
 
@@ -31,6 +44,22 @@ const StorageManager = (() => {
       console.warn('[Storage] Corrupt localStorage data, resetting:', e.message);
       _transactions = [];
     }
+
+    // Migrate legacy string category IDs to stable UUIDs (one-time, in-place).
+    let migrated = false;
+    _transactions = _transactions.map(tx => {
+      const newCatId = LEGACY_CATEGORY_ID_MAP[tx.category_id];
+      if (newCatId) {
+        migrated = true;
+        return { ...tx, category_id: newCatId, synced: false, _pending: true };
+      }
+      return tx;
+    });
+    if (migrated) {
+      _persist();
+      console.info('[Storage] Migrated legacy category IDs to UUIDs');
+    }
+
     Store.state.transactions = [..._transactions];
     console.info('[Storage] Loaded', _transactions.length, 'transaction(s) from localStorage');
   }
