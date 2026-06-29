@@ -20,9 +20,9 @@
 * [x] **2.3. GET /api/v1/analytics/*:** Эндпоинты `timeline` и `donut` (с агрегацией в SQL)[cite: 1].
 
 ### Этап 3: Каркас фронтенда & Telegram SDK (Фронтенд)
-* [ ] **3.1. SPA & Router:** Настройка структуры файлов без фреймворков, переключение вкладок, инициализация `window.Telegram.WebApp`[cite: 2].
-* [ ] **3.2. Theme Engine:** Маппинг CSS-переменных на `themeParams`, бесшовная смена тем (Light/Dark)[cite: 2].
-* [ ] **3.3. Реактивный Store:** Реализация Vanilla JS Store на базе `Proxy` для точечных мутаций DOM[cite: 2].
+* [x] **3.1. SPA & Router:** Настройка структуры файлов без фреймворков, переключение вкладок, инициализация `window.Telegram.WebApp`[cite: 2].
+* [x] **3.2. Theme Engine:** Маппинг CSS-переменных на `themeParams`, бесшовная смена тем (Light/Dark)[cite: 2].
+* [x] **3.3. Реактивный Store:** Реализация Vanilla JS Store на базе `Proxy` для точечных мутаций DOM[cite: 2].
 
 ### Этап 4: Экраны ввода и Offline-First хранилище (Фронтенд)
 * [ ] **4.1. Главный экран & Кастомный NumPad:** Верстка интерфейса ввода, блокировка системной клавиатуры, Haptic Feedback на `pointerdown`[cite: 2].
@@ -38,3 +38,4 @@
 
 ## 📈 Лог токен-затрат (Token-Saving Ledger)
 * *Сессия 0 (Инициализация каркаса):* Claude 3.5 Sonnet (Medium Effort). Затраты: Минимальные. Результат: 100% чистая компиляция.
+* *Сессия 1 (Этап 3 — Frontend Skeleton):* Claude Sonnet 4.6. Создан `frontend/` (index.html, css/style.css, js/store.js, js/app.js). Proxy-реактивность протестирована (3/3 assertions pass). HTTP-сервер запущен на :8080.
