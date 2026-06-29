@@ -55,6 +55,8 @@ func main() {
 		r.Use(deliveryhttp.TelegramAuth(cfg.BotToken))
 		r.Get("/bootstrap", deliveryhttp.NewBootstrapHandler(queries))
 		r.Post("/sync", deliveryhttp.NewSyncHandler(pool))
+		r.Get("/analytics/donut", deliveryhttp.NewGetAnalyticsDonutHandler(queries))
+		r.Get("/analytics/timeline", deliveryhttp.NewGetTimelineHandler(queries))
 	})
 
 	srv := &http.Server{

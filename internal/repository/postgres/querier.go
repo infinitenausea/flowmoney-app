@@ -5,8 +5,10 @@ package repository
 import "context"
 
 type Querier interface {
+	GetAnalyticsDonut(ctx context.Context, userID int64) ([]GetAnalyticsDonutRow, error)
 	GetBudgetsByUserId(ctx context.Context, userID int64) (Budget, error)
 	GetCategoriesByUserId(ctx context.Context, userID int64) ([]Category, error)
+	GetTimelineWithCursor(ctx context.Context, arg GetTimelineWithCursorParams) ([]Transaction, error)
 	UpsertTransaction(ctx context.Context, arg UpsertTransactionParams) error
 	UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error)
 }

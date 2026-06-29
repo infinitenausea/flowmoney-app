@@ -116,3 +116,81 @@ func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionPa
 	)
 	return err
 }
+
+const getAnalyticsDonut = `-- name: GetAnalyticsDonut :many
+SELECT category_id, SUM(amount) AS total
+FROM transactions
+WHERE user_id    = $1
+  AND is_deleted = false
+  AND created_at >= DATE_TRUNC('month', NOW())
+  AND created_at  < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'
+GROUP BY category_id
+`
+
+type GetAnalyticsDonutRow struct {
+	CategoryID pgtype.UUID    `json:"category_id"`
+	Total      pgtype.Numeric `json:"total"`
+}
+
+func (q *Queries) GetAnalyticsDonut(ctx context.Context, userID int64) ([]GetAnalyticsDonutRow, error) {
+	rows, err := q.db.Query(ctx, getAnalyticsDonut, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAnalyticsDonutRow
+	for rows.Next() {
+		var i GetAnalyticsDonutRow
+		if err := rows.Scan(&i.CategoryID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTimelineWithCursor = `-- name: GetTimelineWithCursor :many
+SELECT id, user_id, category_id, amount, created_at, is_deleted
+FROM transactions
+WHERE user_id    = $1
+  AND is_deleted = false
+  AND ($2::TIMESTAMPTZ IS NULL OR created_at < $2)
+ORDER BY created_at DESC
+LIMIT $3
+`
+
+type GetTimelineWithCursorParams struct {
+	UserID int64              `json:"user_id"`
+	Cursor pgtype.Timestamptz `json:"cursor"`
+	Limit  int32              `json:"limit"`
+}
+
+func (q *Queries) GetTimelineWithCursor(ctx context.Context, arg GetTimelineWithCursorParams) ([]Transaction, error) {
+	rows, err := q.db.Query(ctx, getTimelineWithCursor, arg.UserID, arg.Cursor, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Transaction
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CategoryID,
+			&i.Amount,
+			&i.CreatedAt,
+			&i.IsDeleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

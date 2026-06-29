@@ -16,6 +16,24 @@ FROM categories
 WHERE user_id = $1 OR is_system = true
 ORDER BY sort_order ASC;
 
+-- name: GetAnalyticsDonut :many
+SELECT category_id, SUM(amount) AS total
+FROM transactions
+WHERE user_id   = $1
+  AND is_deleted = false
+  AND created_at >= DATE_TRUNC('month', NOW())
+  AND created_at  < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'
+GROUP BY category_id;
+
+-- name: GetTimelineWithCursor :many
+SELECT id, user_id, category_id, amount, created_at, is_deleted
+FROM transactions
+WHERE user_id   = $1
+  AND is_deleted = false
+  AND ($2::TIMESTAMPTZ IS NULL OR created_at < $2)
+ORDER BY created_at DESC
+LIMIT $3;
+
 -- name: UpsertTransaction :exec
 INSERT INTO transactions (id, user_id, category_id, amount, created_at, is_deleted)
 VALUES ($1, $2, $3, $4, $5, $6)
