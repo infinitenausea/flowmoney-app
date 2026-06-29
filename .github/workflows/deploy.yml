@@ -34,12 +34,10 @@ jobs:
             docker compose up -d --build --remove-orphans
 
             echo "→ Running database migrations..."
-            # Migrations are plain SQL files — apply new ones via psql inside the postgres container.
-            # Only files not yet tracked as applied are run (idempotent: each file is applied once).
+            export $(grep -v '^#' .env | xargs)
             for f in migrations/*.up.sql; do
               docker compose exec -T postgres psql \
-                -U "$DB_USER" \
-                -d "$DB_NAME" \
+                -U "$DB_USER" -d "$DB_NAME" \
                 -c "CREATE TABLE IF NOT EXISTS _schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
               applied=$(docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" -tAc \
                 "SELECT COUNT(*) FROM _schema_migrations WHERE filename = '$(basename $f)';")
