@@ -4,6 +4,35 @@
  */
 
 /* ═══════════════════════════════════════════════════
+   0. Блокировка масштабирования (Pinch-to-Zoom & Double-tap Zoom)
+   Выполняется немедленно, до любых других инициализаций.
+═══════════════════════════════════════════════════ */
+
+// Блокируем pinch-to-zoom: срабатывает при касании двумя и более пальцами
+document.addEventListener('touchstart', function(e) {
+  if (e.touches.length > 1) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+// Блокируем gesture-based zoom в Safari/iOS WebKit (gesturestart — проприетарное событие)
+document.addEventListener('gesturestart', function(e) {
+  e.preventDefault();
+}, { passive: false });
+
+// Блокируем double-tap zoom: два касания с интервалом менее 300ms
+(function() {
+  var lastTapTime = 0;
+  document.addEventListener('touchend', function(e) {
+    var now = Date.now();
+    if (now - lastTapTime < 300) {
+      e.preventDefault();
+    }
+    lastTapTime = now;
+  }, { passive: false });
+}());
+
+/* ═══════════════════════════════════════════════════
    1. Telegram WebApp SDK — инициализация
 ═══════════════════════════════════════════════════ */
 
@@ -23,6 +52,29 @@ function initTelegram() {
 
   // Отключаем вертикальный свайп-закрытие на главном экране
   if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
+
+  // ── Фиксация высоты body ─────────────────────────────────────────────────
+  // На Android системный gesture-bar (нижний "подбородок") может перекрывать
+  // контент, потому что dvh и window.innerHeight не учитывают его высоту.
+  // tg.viewportStableHeight — высота viewport без учёта экранной клавиатуры;
+  // именно это значение мы хотим зафиксировать как высоту body.
+  function lockBodyHeight() {
+    var h = tg.viewportStableHeight || window.innerHeight;
+    document.body.style.height = h + 'px';
+    document.getElementById('app').style.height = h + 'px';
+  }
+
+  lockBodyHeight();
+  tg.onEvent('viewportChanged', lockBodyHeight);
+
+  // ── Безопасный нижний отступ из Telegram SDK ─────────────────────────────
+  // env(safe-area-inset-bottom) на Android часто возвращает 0 даже при
+  // наличии gesture-bar. Telegram SDK (Bot API 7.x+) предоставляет точное
+  // значение через tg.safeAreaInsets.bottom — перезаписываем CSS-переменную.
+  var safeBottom = (tg.safeAreaInsets && tg.safeAreaInsets.bottom) || 0;
+  if (safeBottom > 0) {
+    document.documentElement.style.setProperty('--safe-bottom', safeBottom + 'px');
+  }
 }
 
 /* ═══════════════════════════════════════════════════

@@ -39,7 +39,11 @@
 
   /* Высота нижней навигации */
   --nav-height:       60px;
-  --nav-height-safe:  calc(var(--nav-height) + var(--safe-bottom));
+  /* Минимальный паддинг снизу 8px защищает от Android gesture-bar,
+     где env(safe-area-inset-bottom) возвращает 0 даже при наличии системной панели.
+     JS в initTelegram перезаписывает --safe-bottom точным значением от Telegram SDK. */
+  --nav-bottom-pad:   max(var(--safe-bottom), 8px);
+  --nav-height-safe:  calc(var(--nav-height) + var(--nav-bottom-pad));
 }
 
 /* ═══════════════════════════════════════════════════
@@ -50,8 +54,9 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  /* Убираем 300ms задержку тапа на iOS */
-  touch-action: manipulation;
+  /* pan-x pan-y разрешает скролл по обеим осям, но явно исключает pinch-zoom
+     и double-tap zoom (в отличие от manipulation, которая их допускает). */
+  touch-action: pan-x pan-y;
 }
 
 html {
@@ -194,7 +199,7 @@ button {
 
 .screen-content {
   min-height: 100%;
-  padding: 16px 16px calc(16px + var(--safe-bottom));
+  padding: 16px 16px calc(16px + var(--nav-bottom-pad));
 }
 
 .screen-title {
@@ -215,7 +220,7 @@ button {
   left: 0;
   right: 0;
   height: var(--nav-height-safe);
-  padding-bottom: var(--safe-bottom);
+  padding-bottom: var(--nav-bottom-pad);
   background: var(--bg-color);
   border-top: 1px solid color-mix(in srgb, var(--text-color) 10%, transparent);
   display: flex;
