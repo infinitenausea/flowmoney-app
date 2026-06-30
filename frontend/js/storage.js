@@ -98,6 +98,7 @@ const StorageManager = (() => {
       amount:      txPartial.amount,
       currency:    Store.state.currency || 'RUB',
       created_at:  txPartial.created_at || new Date().toISOString(),
+      comment:     txPartial.comment || undefined,
       is_deleted:  false,
       synced:      false,
       _pending:    true,
@@ -281,6 +282,16 @@ const StorageManager = (() => {
 
     const localMap = new Map(_userCategories.map(c => [String(c.id), c]));
     let changed = false;
+
+    // Evict categories that were confirmed synced but are absent from the authoritative
+    // server list — they were hard-deleted on the server and must not be pushed back.
+    const serverIds = new Set(serverCats.map(c => String(c.id)));
+    for (const [id, local] of localMap) {
+      if (local.synced === true && !serverIds.has(id)) {
+        localMap.delete(id);
+        changed = true;
+      }
+    }
 
     serverCats.forEach(serverCat => {
       const id = String(serverCat.id);

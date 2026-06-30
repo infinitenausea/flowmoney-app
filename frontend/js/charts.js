@@ -256,14 +256,6 @@ const DonutChart = (() => {
         timeEl.textContent = time;
 
         infoEl.appendChild(nameEl);
-
-        if (tx.comment) {
-          const commentEl = document.createElement('div');
-          commentEl.className = 'timeline-comment';
-          commentEl.textContent = tx.comment;
-          infoEl.appendChild(commentEl);
-        }
-
         infoEl.appendChild(timeEl);
 
         // Amount
@@ -297,6 +289,14 @@ const DonutChart = (() => {
           '<span>Удалить</span>';
 
         itemEl.appendChild(contentEl);
+
+        if (tx.comment) {
+          const commentEl = document.createElement('div');
+          commentEl.className = 'timeline-comment';
+          commentEl.textContent = tx.comment;
+          itemEl.appendChild(commentEl);
+        }
+
         itemEl.appendChild(swipeEl);
         groupEl.appendChild(itemEl);
       });

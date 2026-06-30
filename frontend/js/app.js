@@ -1180,6 +1180,7 @@ function initAnalytics() {
         category_id: tx.category_id,
         amount: Number(targetAmount.toFixed(2)),
         created_at: new Date().toISOString(),
+        comment: tx.comment,
       });
       SyncRunner.syncWithBackend();
       // renderTimelineFromStore() will fire automatically via the transactions subscriber
