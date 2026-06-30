@@ -188,12 +188,13 @@ const StorageManager = (() => {
         return;
       }
 
+      const normalized = { ...serverTx, amount: parseFloat(serverTx.amount) || 0, synced: true, _pending: false };
       const local = localMap.get(serverTx.id);
       if (!local) {
-        localMap.set(serverTx.id, { ...serverTx, synced: true, _pending: false });
+        localMap.set(serverTx.id, normalized);
         changed = true;
       } else if (!local._pending) {
-        localMap.set(serverTx.id, { ...serverTx, synced: true, _pending: false });
+        localMap.set(serverTx.id, normalized);
         changed = true;
       }
       // local._pending === true: запись ждёт отправки — сервер не перезаписывает

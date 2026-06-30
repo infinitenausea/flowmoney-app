@@ -356,9 +356,10 @@ function initBindings() {
     }
   });
 
-  // Символ валюты
+  // Символ валюты + перерасчёт графика при смене валюты
   Store.subscribe('currency', (val) => {
     if (currencySymbol) currencySymbol.textContent = getCurrencySymbol(val);
+    if (Store.state.currentTab === 'analytics') loadAnalyticsData();
   });
 
   function updateAddButton() {
@@ -459,8 +460,6 @@ function computeLocalDonutData() {
     if (txCurrency !== Store.state.currency && Store.state.rates[txCurrency] && Store.state.rates[Store.state.currency]) {
       amountInAppCurrency = (amountInAppCurrency / Store.state.rates[txCurrency]) * Store.state.rates[Store.state.currency];
     }
-
-    console.log("DONUT DEBUG:", tx.amount, txCurrency, "->", amountInAppCurrency, Store.state.currency);
 
     groups[tx.category_id] = (groups[tx.category_id] || 0) + amountInAppCurrency;
   });
