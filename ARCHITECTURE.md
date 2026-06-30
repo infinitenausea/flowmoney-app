@@ -546,3 +546,17 @@ The conversion is skipped when `txCurrency === Store.state.currency` (amounts al
 - **SVG size:** `<svg class="donut-svg">` dimensions set to `width="100%" height="100%"` — the chart expands to the full width of its container element for improved readability on all screen sizes.
 - **Center amount:** Rendered as `centerAmt.toFixed(2) + ' ' + currencySymbol` (e.g., `"12345.67 ₽"`). `centerAmt` equals `totalAll` — the sum of all category totals (`_lastData.reduce((s, d) => s + d.total, 0)`) — when no segment is selected; switches to the tapped segment's own `total` on category focus. Set via `svgTexts[1].textContent` — no HTML injection.
 - **Legend amounts:** Replaced from percentage shares to absolute formatted values via `_fmtLegendAmt(item.total, currency)`. The helper uses `Number(amount).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })` and appends the currency symbol string. Injected via `amtEl.textContent` — XSS-safe.
+
+**Апдейт 2026-06-30 — Аналитика произвольных интервалов:**
+- Логика `computeLocalDonutData()` расширена: жесткая фильтрация по текущему месяцу заменена на динамический диапазон. Фильтрация идет по условию `txTime >= start && txTime <= end`.
+- Для реактивного стейта `Store.state.analyticsRange` использованы Unix-таймстампы (числа в мс) вместо объектов `Date`. Это предотвращает поломку внутренних механизмов JS-движка (`[[DateValue]]`) при рекурсивном оборачивании объектов в `Proxy`.
+- Переключение периодов (`'day' | 'month'`) реализовано через делегирование pointerdown-событий на контейнере `.analytics-period-switcher`. Стили наследуют переменные Telegram-темы (`--accent-color`, `--hint-color`).
+
+---
+
+### ~~Risk 8 — Ограничение аналитики фиксированным месяцем и системными селектами~~ ✅ FIXED 2026-06-30
+
+**Внедрение произвольных интервалов и кастомного календаря:**
+- Логика `computeLocalDonutData()` расширена: жесткая фильтрация по текущему месяцу заменена на динамический диапазон. Фильтрация идет по условию `txTime >= start && txTime <= end`.
+- Для реактивного стейта `Store.state.analyticsRange` использованы Unix-таймстампы (числа в мс) вместо объектов `Date`. Это предотвращает поломку внутренних механизмов JS-движка (`[[DateValue]]`) при рекурсивном оборачивании объектов в `Proxy`.
+- Переключение периодов (`'day' | 'month' | 'custom'`) реализовано через делегирование pointerdown-событий на контейнере `.analytics-period-switcher`. При выборе `'custom'` отображается блок с двумя нативными HTML5-инпутами дат, стилизованными под переменные Telegram-темы. Рендеринг пончика триггерится автоматически за счет реактивных подписок на стейт.

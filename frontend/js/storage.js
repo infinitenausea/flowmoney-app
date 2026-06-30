@@ -135,13 +135,25 @@ const StorageManager = (() => {
   }
 
   /**
+   * Загружает массив транзакций, полученных с сервера, в пустое хранилище.
+   * Вызывать только когда _transactions пуст (initial pull).
+   * @param {Object[]} items — транзакции из API (уже синхронизированы)
+   */
+  function bulkLoad(items) {
+    if (_transactions.length > 0) return;
+    _transactions = items.map(tx => ({ ...tx, synced: true, _pending: false }));
+    _persist();
+    Store.state.transactions = [..._transactions];
+  }
+
+  /**
    * Возвращает снимок всех транзакций (только для отладки).
    */
   function _dump() {
     return JSON.parse(JSON.stringify(_transactions));
   }
 
-  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, _dump };
+  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, _dump };
 })();
 
 window.StorageManager = StorageManager;

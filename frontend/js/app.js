@@ -825,7 +825,33 @@ async function bootstrap() {
 }
 
 /* ═══════════════════════════════════════════════════
-   11. Вспомогательные утилиты
+   11. Initial Pull — скачивание истории при пустом хранилище
+═══════════════════════════════════════════════════ */
+
+async function initialPull() {
+  const localTxs = Store.state.transactions || [];
+  if (localTxs.length !== 0 || !Store.state.isOnline) return;
+
+  try {
+    const initData = tg?.initData || '';
+    const response = await fetch('/api/v1/analytics/timeline?limit=200', {
+      headers: { 'Authorization': `Telegram ${initData}` },
+    });
+    if (!response.ok) return;
+
+    const data = await response.json();
+    if (!data?.items?.length) return;
+
+    StorageManager.bulkLoad(data.items);
+
+    if (Store.state.currentTab === 'analytics') loadAnalyticsData();
+  } catch (err) {
+    console.error('[App] Initial pull failed:', err);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   12. Вспомогательные утилиты
 ═══════════════════════════════════════════════════ */
 
 const CURRENCY_SYMBOLS = { RUB: '₽', GEL: '₾', USD: '$', EUR: '€' };
@@ -843,7 +869,7 @@ function formatCurrency(amount, currencyOrCode = 'RUB') {
 }
 
 /* ═══════════════════════════════════════════════════
-   12. Инициализация приложения
+   13. Инициализация приложения
 ═══════════════════════════════════════════════════ */
 
 function hideSkeleton() {
@@ -883,6 +909,7 @@ async function init() {
   ]);
 
   hideSkeleton();
+  initialPull();            // скачиваем историю, если localStorage пуст
   SyncRunner.start();       // запускаем фоновый воркер синхронизации
 }
 
