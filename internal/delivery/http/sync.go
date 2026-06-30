@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -45,6 +46,7 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 
 		tx, err := pool.BeginTx(r.Context(), pgx.TxOptions{})
 		if err != nil {
+			log.Printf("SYNC ERROR: begin tx: %v", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -75,6 +77,7 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				IsDeleted:  t.IsDeleted,
 			})
 			if err != nil {
+				log.Printf("SYNC ERROR: upsert tx %s: %v", t.ID, err)
 				tx.Rollback(r.Context())
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return
@@ -82,6 +85,7 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		if err := tx.Commit(r.Context()); err != nil {
+			log.Printf("SYNC ERROR: commit: %v", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
