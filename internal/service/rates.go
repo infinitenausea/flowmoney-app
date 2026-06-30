@@ -23,7 +23,7 @@ func NewRatesManager() *RatesManager {
 	return &RatesManager{
 		rates: map[string]float64{
 			"USD": 1.0,
-			"RUB": 90.0,
+			"RUB": 93.50,
 			"GEL": 2.72,
 			"EUR": 0.92,
 		},
@@ -68,19 +68,19 @@ func (rm *RatesManager) fetch() {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get("https://open.er-api.com/v6/latest/USD")
 	if err != nil {
-		log.Printf("[RatesManager] fetch error: %v", err)
+		log.Printf("[RATES WARN] Failed to fetch actual rates from external API: %v. Retaining last known or fallback rates.", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	var data erAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		log.Printf("[RatesManager] decode error: %v", err)
+		log.Printf("[RATES WARN] Failed to fetch actual rates from external API: %v. Retaining last known or fallback rates.", err)
 		return
 	}
 
 	if data.Result != "success" {
-		log.Printf("[RatesManager] unexpected result field: %q", data.Result)
+		log.Printf("[RATES WARN] Failed to fetch actual rates from external API: unexpected result field %q. Retaining last known or fallback rates.", data.Result)
 		return
 	}
 

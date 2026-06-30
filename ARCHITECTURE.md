@@ -426,19 +426,9 @@ The entire timeline DOM tree is built with `createElement` + `textContent`. Two 
 1. SVG donut and legend — guarded by `_esc()` which escapes `&`, `<`, `>`, `"` before injection.
 2. Swipe-delete overlay — static hardcoded SVG markup; zero user data.
 
-**Vulnerable pattern — `CategoryCarousel.render()` in `app.js`:**
+**~~Vulnerable pattern — `CategoryCarousel.render()` in `app.js`~~ ✅ FIXED 2026-06-30:**
 
-```js
-// cat.name, cat.icon, cat.color injected into innerHTML without escaping
-carousel.innerHTML = categories.map(cat => `
-  <div data-id="${cat.id}">
-    <div style="background:${cat.color}22; color:${cat.color}">${cat.icon}</div>
-    <span>${cat.name}</span>
-  </div>
-`).join('');
-```
-
-Currently **not exploitable** because all categories are server-seeded constants with fixed emoji/hex values. Becomes a **Stored XSS** vector the moment user-defined categories are supported.
+`CategoryCarousel.render()` was rewritten to use `createElement` + `textContent` + DOM style properties. No `innerHTML` or template literals remain. Safe for user-defined categories.
 
 ### 6.3 NumPad Input Limits
 
@@ -499,45 +489,26 @@ This matches the `{"transactions":[...]}` envelope the frontend has always sent.
 
 ---
 
-### Risk 3 — Unbounded Sync Batch Size (MEDIUM)
+### ~~Risk 3 — Unbounded Sync Batch Size (MEDIUM)~~ ✅ FIXED 2026-06-30
 
-`StorageManager.getUnsyncedTransactions()` returns all unsynced transactions with no page cap. A user who accumulates many transactions offline will send a single HTTP request body of unbounded size. The sync handler has no `http.MaxBytesReader` guard.
-
-**Impact:** Memory spike on reconnect; potential DoS vector if many users reconnect simultaneously after extended offline periods.
-
-**Fix:** Add `r.Body = http.MaxBytesReader(w, r.Body, 1<<20)` (1 MB cap) in the sync handler; add client-side batching (e.g., 100 items per request).
+`internal/delivery/http/sync.go` now applies `http.MaxBytesReader(w, r.Body, 1<<20)` before JSON decoding. Payloads exceeding 1 MB are rejected with HTTP 400 `"request body too large"` before any parsing or DB work occurs.
 
 ---
 
-### Risk 4 — CategoryCarousel XSS Surface for User-Defined Categories (MEDIUM, latent)
+### ~~Risk 4 — CategoryCarousel XSS Surface for User-Defined Categories (MEDIUM, latent)~~ ✅ FIXED 2026-06-30
 
-As documented in §6.2, `CategoryCarousel.render()` injects `cat.name`, `cat.icon`, and `cat.color` into `innerHTML` via unescaped template literals. Style-attribute injection via `cat.color` (e.g., `; }; body { background: url(javascript:...) }`) would also bypass CSP if no CSP header is set.
-
-Currently inert. Becomes a **Stored XSS** the moment the user-created categories feature ships.
-
-**Fix:** Port `CategoryCarousel.render()` to `createElement` + `textContent`, identical to the safe pattern in `charts.js::renderTimeline`.
+`CategoryCarousel.render()` in `app.js` has been fully rewritten to use `document.createElement` + `textContent`. No `innerHTML` or template literals remain. `cat.icon` and `cat.name` are injected via `textContent`; `cat.color` is applied via `element.style.background` and `element.style.color` (DOM property assignment — not HTML parsing). The container is cleared with `carousel.textContent = ''`. The function is now Stored XSS–safe for user-defined categories.
 
 ---
 
-### Risk 5 — Homegrown Migration Tracker Without Atomic Rollback (LOW)
+### ~~Risk 5 — Homegrown Migration Tracker Without Atomic Rollback (LOW)~~ ✅ FIXED 2026-06-30
 
-The CI deploy script applies migrations with:
-
-```sh
-docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" < "$f"
-docker compose exec -T postgres psql ... -c "INSERT INTO _schema_migrations ..."
-```
-
-These are two separate `psql` invocations. If the migration SQL executes partially and the process is interrupted before the `INSERT INTO _schema_migrations`, the file will be re-applied on the next deploy — potentially double-executing DDL on a partially-migrated schema.
-
-**Fix:** Combine into one atomic `psql` call: `BEGIN; <migration SQL>; INSERT INTO _schema_migrations ...; COMMIT;`.
+`.github/workflows/deploy.yml` now pipes migration SQL together with the `INSERT INTO _schema_migrations` into a single `psql` invocation using `-v ON_ERROR_STOP=1`. Both the DDL and the tracker insert execute in the same implicit transaction; if any statement fails, `psql` aborts and the migration is not marked as applied — preventing double-application on the next deploy.
 
 ---
 
-### Risk 6 — RatesManager Depends on Unauthenticated Free-Tier External API (LOW)
+### ~~Risk 6 — RatesManager Depends on Unauthenticated Free-Tier External API (LOW)~~ ✅ FIXED 2026-06-30
 
 `service/rates.go` fetches `https://open.er-api.com/v6/latest/USD` with no API key. At a 12-hour interval, a single instance consumes ~60 requests/month against the 1 500/month free tier — safe for the current scale.
 
-On any fetch failure (network error, rate limit, API change), the manager **silently retains the last known in-memory rates** (initialized from hardcoded fallback: `USD=1.0, RUB=90.0, GEL=2.72, EUR=0.92`). After a server restart during an outage, the app starts with the stale fallback values with no log warning or user notification.
-
-**Impact:** Currency converter widget and limit auto-recalculation on currency change will silently use stale rates. No alerting exists.
+On any fetch failure (network error, rate limit, API change, decode error), the manager now logs a `[RATES WARN]` message and retains the last known in-memory rates. Fallback rates updated to mid-2026 values: `USD=1.0, RUB=93.50, GEL=2.72, EUR=0.92`.

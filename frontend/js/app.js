@@ -257,14 +257,31 @@ const CategoryCarousel = (() => {
     const carousel = document.getElementById('category-carousel');
     if (!carousel) return;
 
-    carousel.innerHTML = categories.map(cat => `
-      <div class="category-item" role="option" data-id="${cat.id}" aria-selected="false">
-        <div class="category-icon" style="background:${cat.color}22; color:${cat.color}">
-          ${cat.icon}
-        </div>
-        <span class="category-name">${cat.name}</span>
-      </div>
-    `).join('');
+    carousel.textContent = '';
+
+    const fragment = document.createDocumentFragment();
+    categories.forEach(cat => {
+      const item = document.createElement('div');
+      item.className = 'category-item';
+      item.setAttribute('role', 'option');
+      item.dataset.id = cat.id;
+      item.setAttribute('aria-selected', 'false');
+
+      const iconEl = document.createElement('div');
+      iconEl.className = 'category-icon';
+      iconEl.style.background = cat.color + '22';
+      iconEl.style.color = cat.color;
+      iconEl.textContent = cat.icon;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'category-name';
+      nameEl.textContent = cat.name;
+
+      item.appendChild(iconEl);
+      item.appendChild(nameEl);
+      fragment.appendChild(item);
+    });
+    carousel.appendChild(fragment);
 
     carousel.addEventListener('pointerdown', (e) => {
       const item = e.target.closest('.category-item');

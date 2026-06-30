@@ -28,11 +28,17 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB cap
+
 		type syncRequest struct {
 			Transactions []syncTransaction `json:"transactions"`
 		}
 		var req syncRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if err.Error() == "http: request body too large" {
+				http.Error(w, "request body too large", http.StatusBadRequest)
+				return
+			}
 			http.Error(w, "bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}

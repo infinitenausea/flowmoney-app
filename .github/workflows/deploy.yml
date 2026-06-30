@@ -35,17 +35,19 @@ jobs:
 
             echo "→ Running database migrations..."
             export $(grep -v '^#' .env | xargs)
+            docker compose exec -T postgres psql \
+              -U "$DB_USER" -d "$DB_NAME" \
+              -c "CREATE TABLE IF NOT EXISTS _schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
+
             for f in migrations/*.up.sql; do
-              docker compose exec -T postgres psql \
-                -U "$DB_USER" -d "$DB_NAME" \
-                -c "CREATE TABLE IF NOT EXISTS _schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
               applied=$(docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" -tAc \
-                "SELECT COUNT(*) FROM _schema_migrations WHERE filename = '$(basename $f)';")
+                "SELECT COUNT(*) FROM _schema_migrations WHERE filename = '$(basename "$f")';")
               if [ "$applied" = "0" ]; then
                 echo "  Applying migration: $f"
-                docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" < "$f"
-                docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" \
-                  -c "INSERT INTO _schema_migrations (filename) VALUES ('$(basename $f)');"
+                (cat "$f"; echo "INSERT INTO _schema_migrations (filename) VALUES ('$(basename "$f")') ON CONFLICT DO NOTHING;") \
+                  | docker compose exec -T postgres psql \
+                      -U "$DB_USER" -d "$DB_NAME" \
+                      -v ON_ERROR_STOP=1
               else
                 echo "  Skipping already applied: $f"
               fi
