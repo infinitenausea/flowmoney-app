@@ -110,12 +110,15 @@
         <div class="settings-section">
           <h3 class="settings-section-title">Валюта</h3>
           <div class="currency-select-wrap">
-            <select id="currency-select" class="currency-select" aria-label="Выбор валюты">
-              <option value="RUB">₽ Российский рубль</option>
-              <option value="GEL">₾ Грузинский лари</option>
-              <option value="USD">$ Доллар США</option>
-              <option value="EUR">€ Евро</option>
-            </select>
+            <div id="custom-currency-select" class="custom-select" role="button"
+                 aria-haspopup="listbox" aria-label="Выбор валюты">
+              <span id="custom-currency-label" class="custom-select-label">₽ Российский рубль</span>
+              <svg class="custom-select-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
           </div>
         </div>
 
@@ -274,6 +277,38 @@
         </button>
       </div>
       <button id="budget-modal-save" class="btn-save-limit">Сохранить</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       Шторка: выбор валюты
+  ═══════════════════════════════════════ -->
+  <div id="currency-options-sheet" class="bottom-sheet" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Выбор валюты">
+    <div class="bottom-sheet-backdrop"></div>
+    <div class="bottom-sheet-panel">
+      <div class="bottom-sheet-handle"></div>
+      <div class="bottom-sheet-options" role="listbox" aria-label="Валюта">
+        <div class="currency-sheet-option" role="option" data-currency="RUB" aria-label="Российский рубль">
+          <span class="cso-symbol">₽</span>
+          <span class="cso-name">Российский рубль</span>
+          <span class="cso-code">RUB</span>
+        </div>
+        <div class="currency-sheet-option" role="option" data-currency="GEL" aria-label="Грузинский лари">
+          <span class="cso-symbol">₾</span>
+          <span class="cso-name">Грузинский лари</span>
+          <span class="cso-code">GEL</span>
+        </div>
+        <div class="currency-sheet-option" role="option" data-currency="USD" aria-label="Доллар США">
+          <span class="cso-symbol">$</span>
+          <span class="cso-name">Доллар США</span>
+          <span class="cso-code">USD</span>
+        </div>
+        <div class="currency-sheet-option" role="option" data-currency="EUR" aria-label="Евро">
+          <span class="cso-symbol">€</span>
+          <span class="cso-name">Евро</span>
+          <span class="cso-code">EUR</span>
+        </div>
+      </div>
     </div>
   </div>
 

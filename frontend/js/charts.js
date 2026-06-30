@@ -98,7 +98,7 @@ const DonutChart = (() => {
              style="opacity:${op};transition:opacity .2s ease;cursor:pointer">
           <span class="donut-legend-dot" style="background:${_esc(color)}"></span>
           <span class="donut-legend-name">${_esc(name)}</span>
-          <span class="donut-legend-pct">${Math.round(frac * 100)}%</span>
+          <span class="donut-legend-amt">${_esc(_fmtLegendAmt(convertedTotal, _cur))}</span>
         </div>`;
 
       offset += len;
@@ -142,6 +142,16 @@ const DonutChart = (() => {
     Store.state.selectedAnalyticsCategory = _selectedCatId;
     window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.();
     renderDonutChart(_lastContId, _lastData);
+  }
+
+  function _fmtLegendAmt(amount, currency) {
+    const sym = typeof getCurrencySymbol === 'function'
+      ? getCurrencySymbol(currency)
+      : (currency || '₽');
+    return Number(amount).toLocaleString('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) + ' ' + sym;
   }
 
   function _fmtShort(n) {

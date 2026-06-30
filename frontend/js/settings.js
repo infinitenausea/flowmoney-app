@@ -277,6 +277,57 @@ const Settings = (() => {
     toEl.textContent = result.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
   }
 
+  // ── Currency labels ───────────────────────────────────────────────────────
+
+  const _CURRENCY_LABELS = {
+    RUB: '₽ Российский рубль',
+    GEL: '₾ Грузинский лари',
+    USD: '$ Доллар США',
+    EUR: '€ Евро',
+  };
+
+  // ── Currency bottom sheet ─────────────────────────────────────────────────
+
+  function _openCurrencySheet() {
+    const sheet = document.getElementById('currency-options-sheet');
+    if (!sheet) return;
+    const cur = Store.state.currency || 'RUB';
+    sheet.querySelectorAll('.currency-sheet-option').forEach(opt => {
+      opt.classList.toggle('selected', opt.dataset.currency === cur);
+    });
+    sheet.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => sheet.classList.add('active'));
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+  }
+
+  function _closeCurrencySheet() {
+    const sheet = document.getElementById('currency-options-sheet');
+    if (!sheet) return;
+    sheet.classList.remove('active');
+    setTimeout(() => sheet.setAttribute('aria-hidden', 'true'), 340);
+  }
+
+  function _handleCurrencyChange(newCurrency) {
+    const oldCurrency = Store.state.currency || 'RUB';
+    const rates       = Store.state.rates    || {};
+    const rateFrom    = rates[oldCurrency];
+    const rateTo      = rates[newCurrency];
+
+    if (oldCurrency !== newCurrency && rateFrom && rateTo) {
+      const factor     = rateTo / rateFrom;
+      const newDaily   = Math.round((Store.state.dailyLimit   || 0) * factor * 100) / 100;
+      const newWeekly  = Math.round((Store.state.weeklyLimit  || 0) * factor * 100) / 100;
+      const newMonthly = Math.round((Store.state.monthlyLimit || 0) * factor * 100) / 100;
+      Store.batchUpdate({ currency: newCurrency, dailyLimit: newDaily, weeklyLimit: newWeekly, monthlyLimit: newMonthly });
+      _persist(newDaily, newWeekly, newMonthly);
+    } else {
+      Store.state.currency = newCurrency;
+    }
+
+    _syncToServer();
+    window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.();
+  }
+
   // ── Init ─────────────────────────────────────────────────────────────────
 
   function init() {
@@ -288,11 +339,20 @@ const Settings = (() => {
       if (!Store.state.monthlyLimit && local.monthlyLimit) Store.state.monthlyLimit = local.monthlyLimit;
     }
 
-    // ── Currency select ──────────────────────────────────────────────────
-    const currencySelect = document.getElementById('currency-select');
+    // ── Currency custom select ───────────────────────────────────────────
+    const customCurrencyBtn = document.getElementById('custom-currency-select');
+    const customCurrencyLbl = document.getElementById('custom-currency-label');
 
     Store.subscribe('currency', (val) => {
-      if (currencySelect && val) currencySelect.value = val;
+      // Update custom select button label
+      if (customCurrencyLbl && val) {
+        customCurrencyLbl.textContent = _CURRENCY_LABELS[val] || val;
+      }
+
+      // Sync selected state inside the sheet (even when closed)
+      document.querySelectorAll('.currency-sheet-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.currency === val);
+      });
 
       // Update modal currency symbol if currently open
       const curEl = document.getElementById('budget-modal-currency');
@@ -311,27 +371,28 @@ const Settings = (() => {
       _updateConverterResult();
     });
 
-    if (currencySelect) {
-      currencySelect.addEventListener('change', () => {
-        const newCurrency = currencySelect.value;
-        const oldCurrency = Store.state.currency || 'RUB';
-        const rates       = Store.state.rates    || {};
-        const rateFrom    = rates[oldCurrency];
-        const rateTo      = rates[newCurrency];
+    if (customCurrencyBtn) {
+      customCurrencyBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        _openCurrencySheet();
+      });
+    }
 
-        if (oldCurrency !== newCurrency && rateFrom && rateTo) {
-          const factor     = rateTo / rateFrom;
-          const newDaily   = Math.round((Store.state.dailyLimit   || 0) * factor * 100) / 100;
-          const newWeekly  = Math.round((Store.state.weeklyLimit  || 0) * factor * 100) / 100;
-          const newMonthly = Math.round((Store.state.monthlyLimit || 0) * factor * 100) / 100;
-          Store.batchUpdate({ currency: newCurrency, dailyLimit: newDaily, weeklyLimit: newWeekly, monthlyLimit: newMonthly });
-          _persist(newDaily, newWeekly, newMonthly);
-        } else {
-          Store.state.currency = newCurrency;
-        }
+    // ── Currency sheet options ───────────────────────────────────────────
+    const currencySheet = document.getElementById('currency-options-sheet');
+    if (currencySheet) {
+      currencySheet.querySelector('.bottom-sheet-backdrop')
+        ?.addEventListener('pointerdown', (e) => { e.preventDefault(); _closeCurrencySheet(); });
 
-        _syncToServer();
-        window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.();
+      currencySheet.querySelectorAll('.currency-sheet-option').forEach(opt => {
+        opt.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const newCur = opt.dataset.currency;
+          if (newCur) {
+            _handleCurrencyChange(newCur);
+            _closeCurrencySheet();
+          }
+        });
       });
     }
 
