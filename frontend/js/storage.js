@@ -70,7 +70,8 @@ const StorageManager = (() => {
     }
 
     // First run: seed three default categories so the carousel is never empty.
-    if (_userCategories.length === 0) {
+    // Only seed when the key is absent (null) — an empty array means the server wiped categories.
+    if (_userCategories.length === 0 && localStorage.getItem(CATEGORIES_KEY) === null) {
       _userCategories = [
         { id: self.crypto.randomUUID(), name: 'Продукты',  icon: '🛒', color: '#4ECDC4', sort_order: 0, synced: false },
         { id: self.crypto.randomUUID(), name: 'Транспорт', icon: '🚗', color: '#45B7D1', sort_order: 1, synced: false },
