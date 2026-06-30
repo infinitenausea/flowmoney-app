@@ -641,7 +641,7 @@ const CategoryCarousel = (() => {
     });
   }
 
-  return { init };
+  return { init, render };
 })();
 
 /* ═══════════════════════════════════════════════════
@@ -1225,14 +1225,19 @@ async function bootstrap() {
 
     const budget = data.budget || {};
 
+    // Merge server categories into local storage, deduped strictly by UUID
+    const mergedCategories = StorageManager.mergeCategoriesFromServer(data.categories || [], true);
+
     Store.batchUpdate({
       currency: data.currency || 'RUB',
       weeklyLimit: budget.weekly_limit || 0,
       monthlyLimit: budget.monthly_limit || 0,
-      // Merge server categories into local storage, deduped strictly by UUID
-      categories: StorageManager.mergeCategoriesFromServer(data.categories || [], true),
+      categories: mergedCategories,
       rates: data.rates || {},
     });
+
+    // Explicitly render carousel with server data before skeleton disappears
+    CategoryCarousel.render(mergedCategories);
 
   } catch (err) {
     // Offline-first: не блокируем UI, работаем с локальным состоянием
