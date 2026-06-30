@@ -32,6 +32,10 @@ const Store = (() => {
     // Синхронизация
     pendingSync:  [],
     isOnline:     navigator.onLine,
+
+    // Аналитика — период
+    analyticsPeriod: 'month',          // 'day' | 'month' | 'custom'
+    analyticsRange:  { start: null, end: null }, // Unix-timestamps (ms)
   };
 
   // Реестр подписчиков: { 'ключ': [fn, fn, ...] }

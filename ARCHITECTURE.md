@@ -119,6 +119,22 @@ Three guards wired before any other init (top of `app.js`):
 | `gesturestart` | always | `preventDefault()` — blocks Safari WebKit gesture zoom |
 | `touchend` | `now - lastTap < 300 ms` | `preventDefault()` — blocks double-tap zoom |
 
+### 2.6 Currency Options Bottom Sheet (`#currency-options-sheet`)
+
+The single `<div id="currency-options-sheet">` element is a shared, reusable bottom sheet that serves **three distinct contexts** inside `settings.js`, disambiguated by the private module-level variable `_activeCurrencyTarget` (`'main' | 'from' | 'to'`):
+
+| Trigger (`pointerdown`) | `_activeCurrencyTarget` | Effect on selection |
+|---|---|---|
+| `#custom-currency-select` (main currency button, Settings screen) | `'main'` | Calls `_handleCurrencyChange(newCur)` — updates `Store.state.currency`, recalculates all budget limits by the cross-rate factor `rateTo / rateFrom`, persists to localStorage, fires debounced `PUT /api/v1/settings` |
+| `#custom-converter-from-select` (converter "From" button) | `'from'` | Sets `_converterFrom`, updates `#converter-from-label` text via `_CURRENCY_COMPACT`, calls `_updateConverterResult()` |
+| `#custom-converter-to-select` (converter "To" button) | `'to'` | Sets `_converterTo`, updates `#converter-to-label` text via `_CURRENCY_COMPACT`, calls `_updateConverterResult()` |
+
+**Open:** `_openCurrencySheet(target)` writes `_activeCurrencyTarget`, then toggles the `.selected` CSS class on the `.currency-sheet-option` matching the active currency for that context (`_converterFrom`, `_converterTo`, or `Store.state.currency`). The sheet becomes visible via `requestAnimationFrame(() => sheet.classList.add('active'))`.
+
+**Close:** `_closeCurrencySheet()` removes `.active`; `aria-hidden="true"` is restored after a 340 ms CSS transition delay. The backdrop's `pointerdown` also triggers close.
+
+**Selection dispatch:** The `pointerdown` listener on each `.currency-sheet-option` reads `opt.dataset.currency` and branches on `_activeCurrencyTarget`. All three code paths end with `_closeCurrencySheet()`. All bindings use `pointerdown` with `e.preventDefault()` — consistent with the rest of the app's tap-delay elimination strategy (see §2.5).
+
 ---
 
 ## 3. API Route Map
@@ -137,8 +153,10 @@ Three guards wired before any other init (top of `app.js`):
 | `GET` | `/api/v1/bootstrap` | 200 JSON | 401, 500 |
 | `POST` | `/api/v1/sync` | 200 (empty body) | 400, 401, 500 |
 | `PUT` | `/api/v1/settings` | 200 (empty body) | 400, 401, 500 |
-| `GET` | `/api/v1/analytics/donut` | 200 JSON array | 401, 500 |
+| ~~`GET`~~ | ~~`/api/v1/analytics/donut`~~ **[REMOVED]** | — | — |
 | `GET` | `/api/v1/analytics/timeline` | 200 JSON | 400, 401, 500 |
+
+> **Архитектурное примечание:** Расчёт аналитики пончика полностью перенесён на сторону клиента (Offline-First) для устранения сетевых задержек и конфликтов часовых поясов сервера. Эндпоинт не вызывается фронтендом с коммита `f4232f2`. Логика агрегации — в `computeLocalDonutData()` (`app.js:420`); детали — в §7.
 
 ### 3.3 Response Structures
 
@@ -207,15 +225,9 @@ All items are processed in a single `BEGIN/COMMIT` transaction. Each item is an 
 
 `currency` is optional (empty string = skip currency update). Validated against allowlist: `RUB`, `GEL`, `USD`, `EUR`.
 
-**`GET /api/v1/analytics/donut`**
+~~**`GET /api/v1/analytics/donut`** **[REMOVED]**~~
 
-Returns current-month totals (Jan 1 00:00 UTC to end of month) grouped by category:
-
-```json
-[
-  { "category_id": "11111111-1111-1111-1111-111111111101", "total": 4200.00 }
-]
-```
+> Эндпоинт выведен из эксплуатации. Серверная реализация сохранена в `internal/delivery/http/analytics.go` и `queries/queries.sql` (запрос `GetAnalyticsDonut`), но фронтенд её не вызывает. Агрегация выполняется локально функцией `computeLocalDonutData()` (`app.js:420`).
 
 **`GET /api/v1/analytics/timeline?cursor=RFC3339&limit=N`**
 
@@ -334,7 +346,7 @@ CREATE TABLE IF NOT EXISTS _schema_migrations (
 ### 4.3 Query Notes
 
 - `GetCategoriesByUserId`: `WHERE user_id = $1 OR is_system = true ORDER BY sort_order ASC` — every user sees the 8 system categories regardless of their own `user_id`.
-- `GetAnalyticsDonut`: aggregates current calendar month using `DATE_TRUNC('month', NOW())` on the server — month boundary is server-local timezone (UTC if `TZ` env var is not set).
+- ~~`GetAnalyticsDonut`~~: aggregates current calendar month using `DATE_TRUNC('month', NOW())` on the server — month boundary is server-local timezone (UTC if `TZ` env var is not set). **[UNUSED]** — frontend switched to `computeLocalDonutData()` (client-side); see §7.
 - `UpsertUser`: `ON CONFLICT (tg_id) DO UPDATE SET updated_at = NOW()` — acts as a login ping; updates `updated_at` on every bootstrap call.
 
 ---
@@ -512,3 +524,25 @@ This matches the `{"transactions":[...]}` envelope the frontend has always sent.
 `service/rates.go` fetches `https://open.er-api.com/v6/latest/USD` with no API key. At a 12-hour interval, a single instance consumes ~60 requests/month against the 1 500/month free tier — safe for the current scale.
 
 On any fetch failure (network error, rate limit, API change, decode error), the manager now logs a `[RATES WARN]` message and retains the last known in-memory rates. Fallback rates updated to mid-2026 values: `USD=1.0, RUB=93.50, GEL=2.72, EUR=0.92`.
+
+---
+
+### ~~Risk 7 — Donut Chart: Cross-Currency Aggregation Bug + UX Deficiencies (MEDIUM)~~ ✅ FIXED 2026-06-30
+
+**Root cause (math):** The former `GET /api/v1/analytics/donut` grouped raw transaction amounts server-side without currency conversion — totals were sums of amounts in different currencies. Additionally, `DATE_TRUNC('month', NOW())` used the server's UTC timezone, producing month-boundary mismatches for users in non-UTC locales.
+
+**Fix — `computeLocalDonutData()` (`app.js:420`):**
+
+All aggregation is now client-side (Offline-First). Each transaction is converted to the current app currency **exactly once**, before being added to its category bucket:
+
+```js
+amountInAppCurrency = (amount / rates[txCurrency]) * rates[currentAppCurrency]
+```
+
+The conversion is skipped when `txCurrency === Store.state.currency` (amounts already in app currency). Month boundary is evaluated using the user's local clock via `new Date().getFullYear()` / `.getMonth()` — no server timezone dependency. Only non-deleted (`!tx.is_deleted`) transactions within the current local calendar month are included. Per-category accumulated totals are emitted as `Number(groups[catId].toFixed(2))`.
+
+**Fix — Donut UX (`charts.js`):**
+
+- **SVG size:** `<svg class="donut-svg">` dimensions set to `width="100%" height="100%"` — the chart expands to the full width of its container element for improved readability on all screen sizes.
+- **Center amount:** Rendered as `centerAmt.toFixed(2) + ' ' + currencySymbol` (e.g., `"12345.67 ₽"`). `centerAmt` equals `totalAll` — the sum of all category totals (`_lastData.reduce((s, d) => s + d.total, 0)`) — when no segment is selected; switches to the tapped segment's own `total` on category focus. Set via `svgTexts[1].textContent` — no HTML injection.
+- **Legend amounts:** Replaced from percentage shares to absolute formatted values via `_fmtLegendAmt(item.total, currency)`. The helper uses `Number(amount).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })` and appends the currency symbol string. Injected via `amtEl.textContent` — XSS-safe.

@@ -90,6 +90,16 @@
       <div class="screen-content">
         <h2 class="screen-title">Аналитика</h2>
         <!-- Donut-чарт и таймлайн — Этап 5 -->
+        <div class="analytics-period-switcher" role="group" aria-label="Период аналитики">
+          <button class="period-btn" data-period="day" aria-pressed="false">День</button>
+          <button class="period-btn active" data-period="month" aria-pressed="true">Месяц</button>
+          <button class="period-btn" data-period="custom" aria-pressed="false">Период</button>
+        </div>
+        <div id="custom-date-picker" class="custom-date-picker" aria-hidden="true">
+          <input type="date" id="analytics-start-date" class="date-input" aria-label="Начало периода">
+          <span class="date-range-sep">—</span>
+          <input type="date" id="analytics-end-date" class="date-input" aria-label="Конец периода">
+        </div>
         <div id="donut-container" class="donut-container">
           <canvas id="donut-canvas" aria-label="Расходы по категориям"></canvas>
         </div>

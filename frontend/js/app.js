@@ -417,20 +417,42 @@ function handleAddTransaction() {
    8. Аналитика — загрузка и рендер
 ═══════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════
+   8а. Период аналитики — вычисление диапазона дат
+═══════════════════════════════════════════════════ */
+
+function updateAnalyticsRange() {
+  const period = Store.state.analyticsPeriod;
+  if (period === 'custom') return;
+  const now = new Date();
+  let start, end;
+
+  if (period === 'day') {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else {
+    // 'month' и fallback
+    start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    // day=0 следующего месяца → последний день текущего
+    end   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  }
+
+  Store.state.analyticsRange = { start: start.getTime(), end: end.getTime() };
+}
+
 function computeLocalDonutData() {
   const transactions = Store.state.transactions || [];
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
+  const { start, end } = Store.state.analyticsRange;
 
-  const currentMonthTxs = transactions.filter(tx => {
+  const filteredTxs = transactions.filter(tx => {
     if (tx.is_deleted) return false;
-    const txDate = new Date(tx.created_at);
-    return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+    if (start === null || end === null) return false;
+    const txTime = new Date(tx.created_at).getTime();
+    return txTime >= start && txTime <= end;
   });
 
   const groups = {};
-  currentMonthTxs.forEach(tx => {
+  filteredTxs.forEach(tx => {
     const txCurrency = tx.currency || Store.state.currency;
     let amountInAppCurrency = parseFloat(tx.amount) || 0;
 
@@ -474,6 +496,65 @@ function renderTimelineFromStore() {
   DonutChart.renderTimeline('timeline', txs, Store.state.categories);
 }
 
+function initPeriodSwitcher() {
+  const switcher   = document.querySelector('.analytics-period-switcher');
+  const datePicker = document.getElementById('custom-date-picker');
+  const startInput = document.getElementById('analytics-start-date');
+  const endInput   = document.getElementById('analytics-end-date');
+  if (!switcher) return;
+
+  function toYMD(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function applyCustomRange() {
+    if (!startInput.value || !endInput.value) return;
+    const startDate = new Date(startInput.value);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(endInput.value);
+    endDate.setHours(23, 59, 59, 999);
+    Store.state.analyticsPeriod  = 'custom';
+    Store.state.analyticsRange   = { start: startDate.getTime(), end: endDate.getTime() };
+    if (Store.state.currentTab === 'analytics') loadAnalyticsData();
+  }
+
+  if (startInput) startInput.addEventListener('change', applyCustomRange);
+  if (endInput)   endInput.addEventListener('change', applyCustomRange);
+
+  switcher.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('[data-period]');
+    if (!btn) return;
+    e.preventDefault();
+
+    const period = btn.dataset.period;
+    if (period === Store.state.analyticsPeriod) return;
+
+    tg?.HapticFeedback?.impactOccurred('light');
+
+    switcher.querySelectorAll('[data-period]').forEach(b => {
+      b.classList.toggle('active', b.dataset.period === period);
+      b.setAttribute('aria-pressed', String(b.dataset.period === period));
+    });
+
+    if (period === 'custom') {
+      const now   = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      if (startInput && !startInput.value) startInput.value = toYMD(start);
+      if (endInput   && !endInput.value)   endInput.value   = toYMD(now);
+      if (datePicker) { datePicker.style.display = 'flex'; datePicker.removeAttribute('aria-hidden'); }
+      applyCustomRange();
+    } else {
+      if (datePicker) { datePicker.style.display = 'none'; datePicker.setAttribute('aria-hidden', 'true'); }
+      Store.state.analyticsPeriod = period;
+      updateAnalyticsRange();
+      if (Store.state.currentTab === 'analytics') loadAnalyticsData();
+    }
+  });
+}
+
 function initAnalytics() {
   // Load analytics data whenever the analytics tab is opened.
   // Paint cached data immediately so the chart isn't blank during the async fetch.
@@ -495,6 +576,8 @@ function initAnalytics() {
   Store.subscribe('transactions', () => {
     if (Store.state.currentTab === 'analytics') loadAnalyticsData();
   });
+
+  initPeriodSwitcher();
 
   // Wire up swipe gestures once on the persistent container
   const timelineEl = document.getElementById('timeline');
@@ -613,6 +696,7 @@ async function init() {
   // Порядок: SDK → тема → хранилище → биндинги → роутер → аналитика → данные
   initTelegram();
   initTheme();
+  updateAnalyticsRange();   // вычисляем диапазон до первого рендера аналитики
   StorageManager.init();    // загружаем транзакции из localStorage до рендера
   Settings.init();          // слайдеры лимитов + daily available
   initBindings();

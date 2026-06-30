@@ -479,6 +479,63 @@ button {
    Аналитика — Donut Chart
 ═══════════════════════════════════════════════════ */
 
+.analytics-period-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.period-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: 1.5px solid var(--hint-color, #aaa);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hint-color, #aaa);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.period-btn.active {
+  background: var(--accent-color, #3390ec);
+  border-color: var(--accent-color, #3390ec);
+  color: #fff;
+}
+
+.custom-date-picker {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.date-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--secondary-bg-color, #f0f0f0);
+  color: var(--text-color, #222);
+  border: 1.5px solid color-mix(in srgb, var(--hint-color, #aaa) 50%, transparent);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+}
+
+.date-input:focus {
+  border-color: var(--accent-color, #3390ec);
+}
+
+.date-range-sep {
+  color: var(--hint-color, #999);
+  flex-shrink: 0;
+}
+
 .donut-container {
   padding: 8px 0 16px;
 }
