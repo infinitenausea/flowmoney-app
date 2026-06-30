@@ -8,12 +8,15 @@ import (
 	"errors"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var (
-	ErrMissingHash  = errors.New("tgauth: hash field is missing from initData")
-	ErrInvalidHash  = errors.New("tgauth: hash mismatch — initData is invalid or tampered")
+	ErrMissingHash = errors.New("tgauth: hash field is missing from initData")
+	ErrInvalidHash = errors.New("tgauth: hash mismatch — initData is invalid or tampered")
+	ErrExpired     = errors.New("tgauth: initData has expired")
 )
 
 // VerifyInitData validates the Telegram Mini App initData string using HMAC-SHA256.
@@ -53,6 +56,12 @@ func VerifyInitData(initDataRaw string, botToken string) (bool, error) {
 
 	if subtle.ConstantTimeCompare([]byte(expectedHash), []byte(receivedHash)) != 1 {
 		return false, ErrInvalidHash
+	}
+
+	authDateStr := params.Get("auth_date")
+	authDate, err := strconv.ParseInt(authDateStr, 10, 64)
+	if err != nil || time.Now().Unix()-authDate > 86400 {
+		return false, ErrExpired
 	}
 
 	return true, nil

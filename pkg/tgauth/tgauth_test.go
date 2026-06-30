@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testBotToken = "7415063038:AAHDuRExQp1vTkBs0FgBr2Mrph6a0L5Bk4Y"
@@ -40,7 +42,7 @@ func buildInitData(botToken string, fields map[string]string) string {
 
 func TestVerifyInitData_Valid(t *testing.T) {
 	fields := map[string]string{
-		"auth_date": "1719619200",
+		"auth_date": strconv.FormatInt(time.Now().Unix(), 10),
 		"user":      `{"id":123456789,"first_name":"Alice","language_code":"en"}`,
 		"query_id":  "AAHdF6IQAAAAAN0XohDhrOrc",
 	}
@@ -52,6 +54,22 @@ func TestVerifyInitData_Valid(t *testing.T) {
 	}
 	if !ok {
 		t.Fatal("expected valid initData to return true")
+	}
+}
+
+func TestVerifyInitData_Expired(t *testing.T) {
+	fields := map[string]string{
+		"auth_date": "1719619200", // 2024-06-28 — well beyond 24 h
+		"user":      `{"id":123456789,"first_name":"Alice","language_code":"en"}`,
+	}
+	initData := buildInitData(testBotToken, fields)
+
+	ok, err := VerifyInitData(initData, testBotToken)
+	if err != ErrExpired {
+		t.Fatalf("expected ErrExpired, got: %v", err)
+	}
+	if ok {
+		t.Fatal("expected false for expired initData")
 	}
 }
 

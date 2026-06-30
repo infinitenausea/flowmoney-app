@@ -1,200 +1,255 @@
-# FlowMoney — Architecture Reference
+# FlowMoney — Architecture Document
 
-**Status:** MVP complete. Last updated: 2026-06-30.
+> **Single Source of Truth.** Audited 2026-06-30 against the live codebase.  
+> Supersedes scattered notes in `spec.md` and `system_state.md`.
 
 ---
 
 ## 1. System Overview & Tech Stack
 
-| Layer | Technology | Version / Notes |
+| Layer | Technology | Version / Detail |
 |---|---|---|
-| Language (backend) | Go | 1.21 (module: `github.com/flowmoney/app`) |
-| HTTP router | `go-chi/chi` | v5.1.0 |
-| Database driver | `jackc/pgx` | v5.6.0 (pool via `pgxpool`) |
-| Query layer | `sqlc` | Generated code in `internal/repository/postgres/` |
-| Database | PostgreSQL | 16-alpine (Docker) |
-| Frontend | Vanilla JS (ES6+) / Vanilla CSS | No frameworks, no bundler |
-| Telegram SDK | `telegram-web-app.js` | Loaded from Telegram CDN in `index.html` |
-| Containerisation | Docker (multi-stage build) | Builder: `golang:1.21-alpine` → Runtime: `alpine:3.19` |
-| Compose | `docker-compose.yml` | Two services: `app` (port 8082) + `postgres` |
-| Reverse proxy | Caddy | Pre-configured on host VPS; not in repo |
-| CI/CD | GitHub Actions | `.github/workflows/deploy.yml` — push to `main` → SSH deploy |
-| Migration runner | Custom shell (in deploy workflow) | `_schema_migrations` table tracks applied files |
+| Language | Go | 1.21 (go.mod) |
+| HTTP router | chi | v5.1.0 |
+| DB driver | pgx/v5 (pgxpool) | v5.6.0 |
+| Database | PostgreSQL | 16-alpine (docker-compose) |
+| Runtime deps | — | **Two** direct deps: chi, pgx. Zero ORM. |
+| Frontend | Vanilla JS + CSS | No framework, no bundler, no transpiler |
+| Container | Docker multi-stage | `golang:1.21-alpine` → `alpine:3.19` |
+| Reverse proxy | Caddy | Not in repo; assumed from spec. Terminates TLS. |
+| CI/CD | GitHub Actions | SSH → git pull → docker compose up --build |
+| Migration tracker | Homegrown shell + `_schema_migrations` table | Not golang-migrate |
+| Query generation | sqlc | `sqlc.yaml` → `internal/repository/postgres/` |
+| Exposed port | 8082 | Both inside container and host-mapped |
 
-**Binary size optimisation:** `CGO_ENABLED=0 -ldflags="-s -w"` strips debug symbols, producing a self-contained static binary.
+### Chi middleware stack (applied globally, in order)
+
+```
+middleware.Logger → middleware.Recoverer → middleware.RealIP
+```
+
+`/api/v1/*` additionally wraps with `deliveryhttp.TelegramAuth`.
 
 ---
 
 ## 2. Core Workflow & Auth
 
-### 2.1 HMAC-SHA256 Auth Flow
+### 2.1 Backend HMAC-SHA256 Auth (`pkg/tgauth/tgauth.go`)
 
-Every request to `/api/v1/*` must carry:
+Every protected endpoint requires the header:
+
 ```
 Authorization: Telegram <initData>
 ```
-where `initData` is the URL-encoded string provided by `window.Telegram.WebApp.initData`.
 
-**Validation algorithm** (`pkg/tgauth/tgauth.go`):
+`initData` is the raw URL-encoded string provided by `window.Telegram.WebApp.initData`.
 
-```
-1. Parse initData as URL query string.
-2. Extract `hash` field; abort with ErrMissingHash if absent.
-3. Build sorted key=value pairs from all fields EXCEPT `hash`, joined by "\n".
-4. secret_key = HMAC-SHA256(key="WebAppData", data=botToken)
-5. expected   = HMAC-SHA256(key=secret_key, data=dataCheckString)
-6. Compare expected vs received hash with crypto/subtle.ConstantTimeCompare (timing-safe).
-```
+**Verification algorithm** (exact implementation):
 
-`ErrInvalidHash` → `401 Unauthorized`. Parse errors → `400 Bad Request`.
+1. Parse `initData` as URL query string.
+2. Extract and remove `hash` field.
+3. Collect remaining `key=value` pairs, sort alphabetically, join with `\n` → `dataCheckString`.
+4. `secret_key = HMAC-SHA256(key="WebAppData", data=botToken)`
+5. `expectedHash = HMAC-SHA256(key=secret_key, data=dataCheckString)`
+6. Compare `expectedHash` vs `hash` with `crypto/subtle.ConstantTimeCompare` (timing-safe).
 
 **`telegram_id` extraction** (`internal/delivery/http/middleware.go`):
 
-After signature passes, the middleware parses the `user` field from `initData` (JSON object), extracts `.id` (`int64`), and injects it into the request context under the private key `telegramIDKey`. Downstream handlers call `GetTelegramID(ctx)` — zero value or missing → `401`.
+After HMAC passes, the middleware re-parses `initData`, extracts the `user` JSON field, unmarshals `{ "id": int64 }`, and injects `telegram_id` into the request context under the unexported key `"telegram_id"`. All handlers retrieve it via `GetTelegramID(ctx)`.
 
-### 2.2 Frontend Bootstrap Sequence
+**Error response codes from middleware:**
+
+| Condition | HTTP code |
+|---|---|
+| Missing or malformed `Authorization` header | 400 |
+| Invalid HMAC signature | 401 |
+| Malformed `initData` or missing `user` field | 400 |
+
+### 2.2 Frontend State Init Sequence (`frontend/js/app.js`)
+
+Exact order inside `init()`:
 
 ```
-DOMContentLoaded
-  └─ init()
-       ├─ initTelegram()         → tg.ready() + tg.expand() + disableVerticalSwipes()
-       ├─ initTheme()            → applyTheme(tg.themeParams) + subscribe themeChanged event
-       ├─ StorageManager.init()  → load transactions from localStorage → Store.state.transactions
-       ├─ Settings.init()        → load limits from localStorage, bind sliders
-       ├─ initBindings()         → Store.subscribe() → DOM mutations
-       ├─ Router.init()          → bind pointerdown on .nav-tab elements
-       ├─ NumPad.init()          → bind pointerdown on .numpad
-       ├─ CategoryCarousel.init()→ render defaults, subscribe Store.categories
-       ├─ initAnalytics()        → SwipeGesture.init(), Store subscriptions
-       ├─ initNetworkWatcher()   → online/offline → Store.state.isOnline
-       └─ Promise.all([
-              bootstrap(),           → GET /api/v1/bootstrap → Store.batchUpdate()
-              setTimeout(400ms)      → skeleton visible minimum 400 ms
-          ])
-       └─ hideSkeleton() + SyncRunner.start()
+initTelegram()          tg.ready(), tg.expand(), body height lock, safe-area-bottom CSS var
+initTheme()             applyTheme(tg.themeParams), subscribe themeChanged
+StorageManager.init()   load transactions from localStorage, run UUID migration
+Settings.init()         load budget limits from localStorage, wire currency/limit controls
+initBindings()          reactive DOM ← Store subscriptions
+Router.init()           wire nav tabs, set currentTab = 'home'
+NumPad.init()           wire numpad pointerdown events
+CategoryCarousel.init() render default categories, subscribe to Store.categories
+initAnalytics()         subscribe currentTab/selectedAnalyticsCategory/transactions, init SwipeGesture
+initNetworkWatcher()    window online/offline → Store.state.isOnline
+
+await Promise.all([bootstrap(), wait 400ms])   // skeleton shown ≥ 400 ms
+
+hideSkeleton()          fade-out skeleton (280 ms), reveal #app
+SyncRunner.start()      immediate sync attempt + 15 s interval + online event
 ```
 
 ### 2.3 Theme Engine
 
-`applyTheme(params)` maps Telegram `themeParams` to CSS custom properties on `:root`:
+`applyTheme()` maps 5 Telegram themeParams to CSS custom properties on `:root`:
 
-| CSS variable | Telegram field | Fallback (CSS default) |
+| themeParam | CSS variable |
+|---|---|
+| `bg_color` | `--bg-color` |
+| `secondary_bg_color` | `--secondary-bg-color` |
+| `text_color` | `--text-color` |
+| `hint_color` | `--hint-color` |
+| `button_color` | `--accent-color` |
+
+Theme changes dynamically (light/dark switch) without page reload via `tg.onEvent('themeChanged', ...)`.
+
+### 2.4 SPA Routing
+
+- **No URL hashes.** Tab state lives entirely in `Store.state.currentTab` (string: `'home'` | `'analytics'` | `'settings'`).
+- Screen visibility is toggled via `screen.classList.add/remove('active')` + `aria-hidden` attribute.
+- Transitions driven purely by CSS opacity/transform on `.active` class — no `display:none`.
+- Tab clicks use `pointerdown` (not `click`) to eliminate the 300 ms tap delay.
+- Each tab switch calls `tg.HapticFeedback.impactOccurred('light')`.
+
+### 2.5 Zoom & Tap-Delay Blocking
+
+Three guards wired before any other init (top of `app.js`):
+
+| Event | Condition | Action |
 |---|---|---|
-| `--bg-color` | `tg.themeParams.bg_color` | `#ffffff` |
-| `--secondary-bg-color` | `tg.themeParams.secondary_bg_color` | `#f1f1f1` |
-| `--text-color` | `tg.themeParams.text_color` | `#000000` |
-| `--hint-color` | `tg.themeParams.hint_color` | `#999999` |
-| `--accent-color` | `tg.themeParams.button_color` | `#2AABEE` |
-| `--danger-color` | Fixed `#F87171` | — |
-| `--success-color` | Fixed `#10B981` | — |
-
-Theme changes arrive via `tg.onEvent('themeChanged', ...)` — no page reload required.
-
-### 2.4 SPA Router
-
-Navigation uses `pointerdown` (no 300ms click delay) on `.nav-tab[data-tab="<id>"]` elements. Screen transitions use only `opacity` + CSS classes (no `display:none` toggling). `requestAnimationFrame` ensures transitions fire after class application. Active tab state is also written to `Store.state.currentTab` so other modules (analytics) can react.
+| `touchstart` | `e.touches.length > 1` | `preventDefault()` — blocks pinch-zoom |
+| `gesturestart` | always | `preventDefault()` — blocks Safari WebKit gesture zoom |
+| `touchend` | `now - lastTap < 300 ms` | `preventDefault()` — blocks double-tap zoom |
 
 ---
 
 ## 3. API Route Map
 
-### Public
+### 3.1 Public Endpoints
 
-| Method | Path | Auth | Description | Response codes |
-|---|---|---|---|---|
-| `GET` | `/health` | None | Liveness probe | `200` |
-| `GET` | `/*` (static) | None | SPA static files from `./frontend/`; unknown paths → `index.html` | `200` |
-
-### Protected (`/api/v1/*` — all behind `TelegramAuth` middleware)
-
-| Method | Path | Description | Response codes |
+| Method | Path | Response codes | Body |
 |---|---|---|---|
-| `GET` | `/api/v1/bootstrap` | Initial state load | `200`, `400`, `401`, `500` |
-| `POST` | `/api/v1/sync` | Batch upsert transactions | `200`, `400`, `401`, `500` |
-| `GET` | `/api/v1/analytics/donut` | Monthly spend by category | `200`, `401`, `500` |
-| `GET` | `/api/v1/analytics/timeline` | Paginated transaction history | `200`, `400`, `401`, `500` |
+| `GET` | `/health` | 200 | `{"status":"ok"}` |
+| `GET` | `/*` | 200 | Static files from `./frontend/`; unknown paths serve `index.html` |
 
-### JSON Contracts
+### 3.2 Protected Endpoints (require `Authorization: Telegram <initData>`)
 
-**GET /api/v1/bootstrap → 200**
+| Method | Path | Success | Errors |
+|---|---|---|---|
+| `GET` | `/api/v1/bootstrap` | 200 JSON | 401, 500 |
+| `POST` | `/api/v1/sync` | 200 (empty body) | 400, 401, 500 |
+| `PUT` | `/api/v1/settings` | 200 (empty body) | 400, 401, 500 |
+| `GET` | `/api/v1/analytics/donut` | 200 JSON array | 401, 500 |
+| `GET` | `/api/v1/analytics/timeline` | 200 JSON | 400, 401, 500 |
+
+### 3.3 Response Structures
+
+**`GET /api/v1/bootstrap`**
+
+On first call for a new `telegram_id`, `UpsertUser` creates the user row (default currency: `"USD"`).
+
 ```json
 {
   "currency": "USD",
   "budget": {
-    "daily_limit": 500.00,
-    "weekly_limit": 3000.00,
-    "monthly_limit": 12000.00
+    "daily_limit": 0,
+    "weekly_limit": 5000,
+    "monthly_limit": 0
   },
   "categories": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "user_id": 123456789,
+      "id": "11111111-1111-1111-1111-111111111101",
+      "user_id": 0,
       "name": "Еда",
       "color": "#FF6B6B",
       "icon": "🍕",
-      "is_system": false,
-      "sort_order": 0
+      "is_system": true,
+      "sort_order": 1
     }
-  ]
+  ],
+  "rates": {
+    "USD": 1.0,
+    "RUB": 90.0,
+    "GEL": 2.72,
+    "EUR": 0.92
+  }
 }
 ```
-Notes: `budget` defaults to `{0,0,0}` if user has no budget row (pgx.ErrNoRows is swallowed). User is upserted on every bootstrap call.
 
-**POST /api/v1/sync — Request body**
-```json
-{
-  "transactions": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "category_id": "660e8400-e29b-41d4-a716-446655440001",
-      "amount": 125.50,
-      "created_at": "2026-06-30T10:15:00Z",
-      "is_deleted": false
-    }
-  ]
-}
-```
-`→ 200 OK` (empty body). Each item is upserted atomically inside a single DB transaction (`BeginTx` / `Commit`). Any invalid UUID or `amount ≤ 0` causes full rollback and `400`.
+If no budget row exists, `budget` fields are all `0` (`pgx.ErrNoRows` is handled, not propagated as an error).
 
-**GET /api/v1/analytics/donut → 200**
+**`POST /api/v1/sync`**
+
+The backend expects a **bare JSON array** (not an object wrapper). Each item:
+
 ```json
 [
-  { "category_id": "550e8400-...", "total": 4250.00 },
-  { "category_id": "660e8400-...", "total": 1800.50 }
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "category_id": "11111111-1111-1111-1111-111111111101",
+    "amount": 350.00,
+    "created_at": "2026-06-30T14:22:00Z",
+    "is_deleted": false
+  }
 ]
 ```
-Aggregates current calendar month (`DATE_TRUNC('month', NOW())`) only, excludes soft-deleted rows.
 
-**GET /api/v1/analytics/timeline → 200**
+All items are processed in a single `BEGIN/COMMIT` transaction. Each item is an `UpsertTransaction` (`ON CONFLICT (id) DO UPDATE`). On any error, the entire batch is rolled back.
+
+**`PUT /api/v1/settings`**
+
+```json
+{
+  "currency": "RUB",
+  "daily_limit": 0,
+  "weekly_limit": 5000,
+  "monthly_limit": 20000
+}
 ```
-Query params:
-  cursor  string  RFC3339 timestamp (exclusive upper bound), omit for first page
-  limit   int     1–200, default 20
+
+`currency` is optional (empty string = skip currency update). Validated against allowlist: `RUB`, `GEL`, `USD`, `EUR`.
+
+**`GET /api/v1/analytics/donut`**
+
+Returns current-month totals (Jan 1 00:00 UTC to end of month) grouped by category:
+
+```json
+[
+  { "category_id": "11111111-1111-1111-1111-111111111101", "total": 4200.00 }
+]
 ```
+
+**`GET /api/v1/analytics/timeline?cursor=RFC3339&limit=N`**
+
+Cursor-based pagination. Default limit: 20. Max limit: 200.
+
+- `cursor` — RFC3339 timestamp; returns items with `created_at < cursor` (older than cursor).
+- Response `next_cursor` — RFC3339Nano timestamp of the **oldest item in the current page**. Pass as `cursor` for the next page. `null` when there are no more items.
+
 ```json
 {
   "items": [
     {
-      "id": "550e8400-...",
-      "category_id": "660e8400-...",
-      "amount": 125.50,
-      "created_at": "2026-06-30T10:15:00Z",
+      "id": "uuid",
+      "category_id": "uuid",
+      "amount": 350.00,
+      "created_at": "2026-06-30T14:22:00Z",
       "is_deleted": false
     }
   ],
-  "next_cursor": "2026-06-29T22:00:00.000000000Z"
+  "next_cursor": "2026-06-29T10:15:00.123456789Z"
 }
 ```
-`next_cursor` is the `created_at` of the oldest item in the current page (RFC3339Nano). `null` when no more pages exist. Only non-deleted transactions are returned.
+
+Only non-deleted transactions are returned. Query uses the partial composite index `idx_transactions_user_timeline`.
 
 ---
 
 ## 4. Data Model
 
-### DDL (from `migrations/000001_init_schema.up.sql`)
+### 4.1 DDL
 
 ```sql
--- users
+-- Migration 000001_init_schema.up.sql
+
 CREATE TABLE users (
     tg_id      BIGINT      PRIMARY KEY,
     currency   VARCHAR(10) NOT NULL DEFAULT 'USD',
@@ -202,7 +257,6 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- categories
 CREATE TABLE categories (
     id         UUID        PRIMARY KEY,
     user_id    BIGINT      NOT NULL REFERENCES users(tg_id) ON DELETE CASCADE,
@@ -215,7 +269,6 @@ CREATE TABLE categories (
 
 CREATE INDEX idx_categories_user_id ON categories(user_id);
 
--- transactions
 CREATE TABLE transactions (
     id          UUID           PRIMARY KEY,
     user_id     BIGINT         NOT NULL REFERENCES users(tg_id) ON DELETE CASCADE,
@@ -227,12 +280,10 @@ CREATE TABLE transactions (
 
 CREATE INDEX idx_transactions_user_id    ON transactions(user_id);
 CREATE INDEX idx_transactions_created_at ON transactions(created_at DESC);
--- Composite partial index for the hot query: user's active transactions ordered by time
+-- composite partial: used by GetTimelineWithCursor and donut aggregation
 CREATE INDEX idx_transactions_user_timeline
-    ON transactions(user_id, created_at DESC)
-    WHERE is_deleted = FALSE;
+    ON transactions(user_id, created_at DESC) WHERE is_deleted = FALSE;
 
--- budgets (one row per user, upserted)
 CREATE TABLE budgets (
     user_id       BIGINT         PRIMARY KEY REFERENCES users(tg_id) ON DELETE CASCADE,
     daily_limit   DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (daily_limit >= 0),
@@ -241,20 +292,50 @@ CREATE TABLE budgets (
 );
 ```
 
-### Constraint rationale
+```sql
+-- Migration 000002_seed_system_categories.up.sql
+-- System user (tg_id = 0): sentinel owner of all shared system categories.
+-- Real Telegram IDs are always positive, so 0 is a safe sentinel.
 
-| Constraint | Table | Reason |
+INSERT INTO users (tg_id, currency) VALUES (0, 'USD') ON CONFLICT DO NOTHING;
+
+INSERT INTO categories (id, user_id, name, color, icon, is_system, sort_order) VALUES
+  ('11111111-1111-1111-1111-111111111101', 0, 'Еда',       '#FF6B6B', '🍕', true, 1),
+  ('11111111-1111-1111-1111-111111111102', 0, 'Транспорт', '#4ECDC4', '🚇', true, 2),
+  ('11111111-1111-1111-1111-111111111103', 0, 'Покупки',   '#45B7D1', '🛍️', true, 3),
+  ('11111111-1111-1111-1111-111111111104', 0, 'Здоровье',  '#96CEB4', '💊', true, 4),
+  ('11111111-1111-1111-1111-111111111105', 0, 'Кафе',      '#FFEAA7', '☕', true, 5),
+  ('11111111-1111-1111-1111-111111111106', 0, 'Спорт',     '#DDA0DD', '⚽', true, 6),
+  ('11111111-1111-1111-1111-111111111107', 0, 'Дом',       '#98D8C8', '🏠', true, 7),
+  ('11111111-1111-1111-1111-111111111108', 0, 'Другое',    '#B0C4DE', '💡', true, 8)
+ON CONFLICT (id) DO NOTHING;
+```
+
+```sql
+-- Homegrown migration tracker (created by CI script inline, not a migration file)
+CREATE TABLE IF NOT EXISTS _schema_migrations (
+    filename   TEXT        PRIMARY KEY,
+    applied_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### 4.2 Key Constraints Explained
+
+| Constraint | Table | Purpose |
 |---|---|---|
-| `ON DELETE CASCADE` | `categories.user_id`, `transactions.user_id`, `budgets.user_id` | Full data wipe when user is deleted |
-| `ON DELETE RESTRICT` | `transactions.category_id` | Prevents orphan transactions; category must be soft-hidden, not deleted |
-| `CHECK (amount > 0)` | `transactions.amount` | DB-level guard; frontend caps at 999,999 |
-| `CHECK (*_limit >= 0)` | `budgets.*` | Budgets can be zero (unlimited) but never negative |
-| `TIMESTAMPTZ` | All timestamp columns | Stores UTC; avoids DST ambiguity |
-| Partial index `WHERE is_deleted = FALSE` | `transactions` | The timeline query never reads deleted rows; keeps index small |
+| `ON DELETE CASCADE` | categories → users | Deleting a user wipes all their categories |
+| `ON DELETE CASCADE` | transactions → users | Deleting a user wipes all their transactions |
+| `ON DELETE CASCADE` | budgets → users | Deleting a user wipes their budget row |
+| `ON DELETE RESTRICT` | transactions → categories | Prevents orphan transactions; category can't be deleted while in use |
+| `CHECK (amount > 0)` | transactions | Enforces positive amounts at DB level |
+| `CHECK (daily/weekly/monthly_limit >= 0)` | budgets | Limits can be zero (disabled) but not negative |
+| `TIMESTAMPTZ` | all date columns | Stored as UTC; no timezone-aware confusion |
 
-### Migration management
+### 4.3 Query Notes
 
-CI/CD applies migrations via a custom shell loop that tracks applied files in `_schema_migrations (filename TEXT PRIMARY KEY)`. This is a **homegrown tracker** — not `golang-migrate` or `flyway`.
+- `GetCategoriesByUserId`: `WHERE user_id = $1 OR is_system = true ORDER BY sort_order ASC` — every user sees the 8 system categories regardless of their own `user_id`.
+- `GetAnalyticsDonut`: aggregates current calendar month using `DATE_TRUNC('month', NOW())` on the server — month boundary is server-local timezone (UTC if `TZ` env var is not set).
+- `UpsertUser`: `ON CONFLICT (tg_id) DO UPDATE SET updated_at = NOW()` — acts as a login ping; updates `updated_at` on every bootstrap call.
 
 ---
 
@@ -263,62 +344,52 @@ CI/CD applies migrations via a custom shell loop that tracks applied files in `_
 ```
 FlowMoney-app/
 │
-├── cmd/app/
-│   └── main.go                   # Entry point: config, DB pool, chi router, graceful shutdown
+├── cmd/app/main.go              Entry point: config load, DB pool, chi router, file server, graceful shutdown
 │
 ├── internal/
-│   ├── config/
-│   │   └── config.go             # Env-var loader; mustEnv() panics on missing required vars
-│   │
+│   ├── config/config.go         Reads env vars; mustEnv() panics on missing required vars
 │   ├── delivery/http/
-│   │   ├── middleware.go         # TelegramAuth() middleware + GetTelegramID() context helper
-│   │   ├── bootstrap.go          # GET /api/v1/bootstrap handler; upserts user on every call
-│   │   ├── sync.go               # POST /api/v1/sync handler; single DB transaction for batch upsert
-│   │   └── analytics.go          # GET /api/v1/analytics/donut + /timeline handlers
-│   │
-│   └── repository/postgres/
-│       ├── queries/
-│       │   └── queries.sql       # sqlc source: UpsertUser, GetBudgets, GetCategories,
-│       │                         #   UpsertTransaction, GetAnalyticsDonut, GetTimelineWithCursor
-│       ├── db.go                 # Generated: DBTX interface + New() constructor
-│       ├── models.go             # Generated: User, Category, Budget, Transaction structs
-│       ├── querier.go            # Generated: Querier interface (for DI / mocking)
-│       └── queries.sql.go        # Generated: concrete sqlc query implementations
+│   │   ├── middleware.go        TelegramAuth middleware: HMAC verify → inject telegram_id into ctx
+│   │   ├── bootstrap.go        GET /bootstrap: UpsertUser + GetBudget + GetCategories + rates
+│   │   ├── sync.go             POST /sync: DB transaction wrapping batch UpsertTransaction
+│   │   ├── settings.go         PUT /settings: UpdateUserCurrency + UpsertBudget
+│   │   └── analytics.go        GET /analytics/donut + GET /analytics/timeline (cursor pagination)
+│   ├── repository/postgres/
+│   │   ├── db.go               sqlc-generated: DBTX interface (Pool or Tx)
+│   │   ├── models.go           sqlc-generated: User, Category, Transaction, Budget structs
+│   │   ├── querier.go          sqlc-generated: Querier interface
+│   │   ├── queries.sql.go      sqlc-generated: all query implementations
+│   │   └── queries/
+│   │       └── queries.sql     Source SQL queries (8 named queries)
+│   └── service/
+│       └── rates.go            RatesManager: in-memory exchange rates, 12 h refresh from open.er-api.com
 │
 ├── pkg/tgauth/
-│   └── tgauth.go                 # VerifyInitData(): HMAC-SHA256 validation, timing-safe compare
+│   ├── tgauth.go               VerifyInitData: pure HMAC-SHA256 verification, no external deps
+│   └── tgauth_test.go          Unit tests for VerifyInitData
 │
 ├── migrations/
-│   └── 000001_init_schema.up.sql # DDL: users, categories, transactions, budgets + indexes
+│   ├── 000001_init_schema.up.sql    Creates users, categories, transactions, budgets + indexes
+│   └── 000002_seed_system_categories.up.sql  Seeds system user (tg_id=0) and 8 system categories
 │
 ├── frontend/
-│   ├── index.html                # SPA shell: Telegram SDK script tag, three screen divs,
-│   │                             #   nav tabs, skeleton overlay, numpad markup
-│   ├── css/
-│   │   └── style.css             # Vanilla CSS; CSS vars for theming; safe-area insets;
-│   │                             #   skeleton shimmer animation; transform-only transitions
+│   ├── index.html              Single HTML shell; skeleton loader, three screen divs, bottom nav
+│   ├── css/style.css           All styles; CSS custom properties for Telegram theme vars
 │   └── js/
-│       ├── store.js              # Reactive singleton Store via Proxy; subscribe/batchUpdate/reset
-│       ├── app.js                # initTelegram, initTheme, Router, NumPad, CategoryCarousel,
-│       │                         #   bootstrap(), loadAnalyticsData(), init() orchestrator
-│       ├── storage.js            # StorageManager: localStorage CRUD; UUID via crypto.randomUUID()
-│       ├── sync.js               # SyncRunner: 15 s interval + 'online' event → POST /api/v1/sync
-│       ├── charts.js             # DonutChart: SVG stroke-dasharray donut + timeline renderer
-│       ├── gestures.js           # SwipeGesture: pointer-event delegation, left=delete, right=duplicate
-│       └── settings.js           # Settings: budget sliders, progress bars, dailyAvailable compute
+│       ├── store.js            Reactive Proxy-based Store; key-scoped subscriptions; batchUpdate
+│       ├── storage.js          StorageManager: localStorage r/w; UUID migration; soft-delete
+│       ├── sync.js             SyncRunner: 15 s interval + online event; _isSyncing mutex flag
+│       ├── settings.js         Settings: currency/limit controls; debounced server sync (1500 ms); converter widget
+│       ├── app.js              App entry: Telegram SDK init, Theme, Router, NumPad, CategoryCarousel, bindings
+│       ├── charts.js           DonutChart: SVG donut + timeline DOM builder; _esc() XSS guard
+│       └── gestures.js         SwipeGesture: pointer-based left/right swipe on timeline items
 │
-├── .github/workflows/
-│   └── deploy.yml                # Push-to-main → SSH → git pull → docker compose up --build
-│                                 #   → shell-loop migration runner
-│
-├── docker-compose.yml            # Services: app (8082) + postgres:16-alpine; healthcheck on postgres
-├── Dockerfile                    # Multi-stage: golang:1.21-alpine builder → alpine:3.19 runtime
-├── go.mod                        # Module: github.com/flowmoney/app, Go 1.21
-├── go.sum
-├── sqlc.yaml                     # sqlc config: queries → internal/repository/postgres/queries/
-├── .env.example                  # PORT, DB_*, TELEGRAM_BOT_TOKEN placeholders
-├── spec.md                       # Product & technical specification (source of truth)
-└── system_state.md               # Development roadmap and session log
+├── .github/workflows/deploy.yml    CI: SSH to VPS → git pull → docker compose up --build → migrations
+├── Dockerfile                  Multi-stage: builder (golang:1.21-alpine) → runtime (alpine:3.19)
+├── docker-compose.yml          postgres:16-alpine + app; port 8082:8082; healthcheck on postgres
+├── sqlc.yaml                   sqlc codegen config
+├── go.mod / go.sum             Module: github.com/flowmoney/app
+└── .env.example                Documents required env vars
 ```
 
 ---
@@ -327,88 +398,146 @@ FlowMoney-app/
 
 ### 6.1 DB Error Masking
 
-All handler error paths return only generic strings to the client:
+All handler functions return only `"internal server error"` to the client on DB failures:
+
 ```go
+// Pattern used in bootstrap.go, sync.go, settings.go, analytics.go
 http.Error(w, "internal server error", http.StatusInternalServerError)
 ```
-Raw `pgx` errors (containing table names, column values, constraint names) never reach the HTTP response. The only exception is `pgx.ErrNoRows`, which is explicitly swallowed in `bootstrap.go` (budget row may not exist for new users).
 
-Errors are currently written to `log.Printf` via `chi/middleware.Logger` — no structured logging or log aggregation is wired up.
+Raw pgx errors (e.g., `pgx: no rows in result set`, constraint violation messages) are **never forwarded** to the client. They are absorbed silently; the chi `middleware.Logger` logs the HTTP exchange but not the error bodies.
 
-### 6.2 Stored XSS Prevention
+**Partial exception:** `middleware.go` returns `"bad request: " + err.Error()` for parsing failures. The errors exposed are from the `tgauth` package (`"tgauth: hash field is missing from initData"`) and from `url.ParseQuery` — not from pgx. These do not expose DB internals.
 
-**Category carousel** (`app.js:206`): category data is interpolated into a template literal via `.innerHTML = categories.map(...)`. This is the primary XSS surface. Mitigation: category `name`, `icon`, and `color` are system-seeded server-side; user-submitted category data is not yet implemented. When the settings screen's "category builder" is implemented, this render path **must** switch to `createElement + textContent`.
+### 6.2 XSS Protection Standards
 
-**Timeline / donut chart** (`charts.js`): transaction data rendered into SVG elements. Verify that category names and amounts use `textContent` / attribute setting, not raw HTML injection.
+**Safe pattern — timeline renderer (`charts.js`):**
 
-**NumPad double-tap zoom (iOS WebKit)**: mitigated via `touch-action: manipulation` on numpad buttons in CSS, and `e.preventDefault()` on `pointerdown`. The `<meta name="viewport" content="..., user-scalable=no">` tag provides a second layer.
+```js
+// All user-visible data via textContent — HTML injection impossible
+const nameEl = document.createElement('div');
+nameEl.textContent = categoryName;  // safe regardless of content
 
-**Input validation summary:**
+const iconEl = document.createElement('div');
+iconEl.textContent = categoryIcon;  // emoji injected as text, not markup
+```
 
-| Input | Frontend limit | Backend constraint |
+The entire timeline DOM tree is built with `createElement` + `textContent`. Two `innerHTML` assignments in `charts.js` are safe:
+1. SVG donut and legend — guarded by `_esc()` which escapes `&`, `<`, `>`, `"` before injection.
+2. Swipe-delete overlay — static hardcoded SVG markup; zero user data.
+
+**Vulnerable pattern — `CategoryCarousel.render()` in `app.js`:**
+
+```js
+// cat.name, cat.icon, cat.color injected into innerHTML without escaping
+carousel.innerHTML = categories.map(cat => `
+  <div data-id="${cat.id}">
+    <div style="background:${cat.color}22; color:${cat.color}">${cat.icon}</div>
+    <span>${cat.name}</span>
+  </div>
+`).join('');
+```
+
+Currently **not exploitable** because all categories are server-seeded constants with fixed emoji/hex values. Becomes a **Stored XSS** vector the moment user-defined categories are supported.
+
+### 6.3 NumPad Input Limits
+
+| Limit | Numpad (home screen) | Budget modal (settings) |
 |---|---|---|
-| Amount (numpad) | Max 6 integer digits; max 2 decimal digits; cap at 999,999 | `CHECK (amount > 0)`, `DECIMAL(18,2)` |
-| Cursor (timeline) | RFC3339 string | Server rejects non-RFC3339 with 400 |
-| Limit param (timeline) | — | Server enforces 1–200 range |
-| UUID (sync) | `crypto.randomUUID()` v4 | `pgtype.UUID.Scan()` rejects malformed strings |
+| Max integer digits | 6 | 7 |
+| Max decimal digits | 2 | 2 |
+| Max value | 999,999 | 9,999,999 |
+| Source | `app.js MAX_DIGITS/MAX_AMOUNT` | `settings.js MAX_DIGITS/MAX_AMOUNT` |
 
-### 6.3 Dependency Surface
+The DB `CHECK (amount > 0)` is the only server-side amount guard; there is no server-side upper-bound validation.
 
-Zero runtime JS dependencies. Backend direct dependencies: `chi` (router) and `pgx` (DB). No Redis, no external cache, no message queue. Attack surface is minimal.
+### 6.4 Key Timings
+
+| Behavior | Value |
+|---|---|
+| Double-tap zoom threshold | 300 ms |
+| Numpad key press animation | 120 ms |
+| Skeleton minimum display | 400 ms |
+| Skeleton fade-out animation | 280 ms |
+| Settings server sync debounce | 1500 ms |
+| Budget modal close animation | 340 ms |
+| SyncRunner interval | 15 000 ms |
+| RatesManager refresh interval | 12 h |
+| RatesManager HTTP timeout | 10 s |
+
+### 6.5 Server Timeouts
+
+| Timeout | Value |
+|---|---|
+| `ReadTimeout` | 15 s |
+| `WriteTimeout` | 15 s |
+| `IdleTimeout` | 60 s |
+| DB pool `Ping` at startup | 10 s context |
+| Graceful shutdown | 10 s context |
 
 ---
 
 ## 7. Hidden Architectural Weaknesses & Risks
 
-### Risk 1: No `auth_date` Expiry Check — Replay Attack Vector
+### ~~Risk 1 — `auth_date` Not Validated → Replay Attack (CRITICAL)~~ ✅ FIXED 2026-06-30
 
-**Current state:** `tgauth.VerifyInitData()` validates only the HMAC signature. It does **not** read or validate the `auth_date` field in `initData`.
+`pkg/tgauth/tgauth.go` now validates `auth_date` after a successful HMAC check. If `auth_date` is missing, unparseable, or more than 86 400 seconds (24 hours) old, `VerifyInitData` returns `ErrExpired`. A captured `initData` is no longer replayable indefinitely. `tgauth_test.go` covers the expiry path with `TestVerifyInitData_Expired`.
 
-**Threat:** A valid `initData` token intercepted from any past session (via man-in-the-middle, clipboard, log leak, etc.) can be replayed indefinitely. Telegram's own docs recommend rejecting tokens where `auth_date` is older than a few minutes.
+---
 
-**Fix:** Add to `tgauth.go`:
+### ~~Risk 2 — Sync Payload Format Mismatch → Data Never Reaches PostgreSQL (CRITICAL)~~ ✅ FIXED 2026-06-30
+
+`internal/delivery/http/sync.go` now decodes the request body into a `syncRequest` wrapper struct:
+
 ```go
-authDateStr := params.Get("auth_date")
-authDate, err := strconv.ParseInt(authDateStr, 10, 64)
-if err != nil || time.Since(time.Unix(authDate, 0)) > 24*time.Hour {
-    return false, ErrExpiredInitData
+type syncRequest struct {
+    Transactions []syncTransaction `json:"transactions"`
 }
 ```
 
----
-
-### Risk 2: SyncRunner Batch Size Unbounded — Memory & Timeout Risk
-
-**Current state:** `SyncRunner.syncWithBackend()` calls `StorageManager.getUnsyncedTransactions()` and sends the entire pending array as a single JSON body to `POST /api/v1/sync`. The server loops over all items in a single DB transaction.
-
-**Threat:** If the device stays offline for an extended period and accumulates thousands of transactions (theoretically possible — no client-side cap on pending queue depth), the sync payload can be arbitrarily large. The server's `ReadTimeout: 15s` may cause the request to be cut off mid-transaction, leaving the DB transaction rolled back but the client unaware (the `fetch` will timeout, retry triggers, infinite loop risk).
-
-**Fix:** Chunk the sync payload on the client (e.g., batches of 50), confirm each chunk before sending the next.
+This matches the `{"transactions":[...]}` envelope the frontend has always sent. The ACID transaction logic is unchanged. Transactions now correctly reach PostgreSQL.
 
 ---
 
-### Risk 3: In-Flight Sync Race Condition
+### Risk 3 — Unbounded Sync Batch Size (MEDIUM)
 
-**Current state:** `_isSyncing` boolean is the only guard against concurrent sync runs. However:
-- The `'online'` event and the `setInterval` tick can fire nearly simultaneously.
-- `SyncRunner.syncWithBackend()` is also called immediately after `handleAddTransaction()`.
+`StorageManager.getUnsyncedTransactions()` returns all unsynced transactions with no page cap. A user who accumulates many transactions offline will send a single HTTP request body of unbounded size. The sync handler has no `http.MaxBytesReader` guard.
 
-If `markAsSynced()` is called while a second sync attempt has already collected the same `pending` array (before the first run's `markAsSynced` ran), the server will receive duplicate batches. The server handles this correctly (`ON CONFLICT DO UPDATE`), but the client-side `_isSyncing` flag is the only race protection — if the JS event loop yields between the `_isSyncing = true` assignment and the `fetch`, a concurrent call could slip through on the same task-queue microtask.
+**Impact:** Memory spike on reconnect; potential DoS vector if many users reconnect simultaneously after extended offline periods.
 
-In practice this is low-risk due to single-threaded JS, but the `_isSyncing` flag should be set **synchronously before any `await`** (it already is — `_isSyncing = true` precedes the first `await fetch`), so this pattern is currently safe. Worth documenting as a constraint: **never insert an `await` before the `_isSyncing = true` line.**
+**Fix:** Add `r.Body = http.MaxBytesReader(w, r.Body, 1<<20)` (1 MB cap) in the sync handler; add client-side batching (e.g., 100 items per request).
 
 ---
 
-### Risk 4: Migration System Has No Down-Migration or Idempotency for DDL Failures
+### Risk 4 — CategoryCarousel XSS Surface for User-Defined Categories (MEDIUM, latent)
 
-**Current state:** The CI/CD loop applies `.up.sql` files tracked by a simple `filename TEXT PRIMARY KEY` table. There are no `.down.sql` rollback scripts. If a migration partially fails (e.g., index creation fails after table creation succeeds), the filename is not recorded in `_schema_migrations` (the `INSERT` is a separate `psql` call after the SQL file runs), so the broken migration will be re-attempted on the next deploy — potentially causing a `CREATE TABLE` error because the table already exists.
+As documented in §6.2, `CategoryCarousel.render()` injects `cat.name`, `cat.icon`, and `cat.color` into `innerHTML` via unescaped template literals. Style-attribute injection via `cat.color` (e.g., `; }; body { background: url(javascript:...) }`) would also bypass CSP if no CSP header is set.
 
-**Fix:** Wrap each migration in an explicit `BEGIN; ... COMMIT;` block within the SQL file itself, or migrate to `golang-migrate` which handles atomicity and rollback natively.
+Currently inert. Becomes a **Stored XSS** the moment the user-created categories feature ships.
+
+**Fix:** Port `CategoryCarousel.render()` to `createElement` + `textContent`, identical to the safe pattern in `charts.js::renderTimeline`.
 
 ---
 
-### Risk 5: Category Render Uses `innerHTML` with Server Data
+### Risk 5 — Homegrown Migration Tracker Without Atomic Rollback (LOW)
 
-**Current state:** `CategoryCarousel.render()` in `app.js:206` builds HTML using a template literal and assigns it to `carousel.innerHTML`. The `cat.icon` field can contain arbitrary strings (emoji or SVG glyph names from the spec's "24 system glyphs" palette). If a future backend change or a compromised category record injects `<script>` or event-handler attributes into `name` or `icon`, this becomes a stored XSS vector.
+The CI deploy script applies migrations with:
 
-**Fix (when category builder is implemented):** Replace the template-literal approach with `createElement('div')` + `element.textContent = cat.name` for all user-controlled fields.
+```sh
+docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" < "$f"
+docker compose exec -T postgres psql ... -c "INSERT INTO _schema_migrations ..."
+```
+
+These are two separate `psql` invocations. If the migration SQL executes partially and the process is interrupted before the `INSERT INTO _schema_migrations`, the file will be re-applied on the next deploy — potentially double-executing DDL on a partially-migrated schema.
+
+**Fix:** Combine into one atomic `psql` call: `BEGIN; <migration SQL>; INSERT INTO _schema_migrations ...; COMMIT;`.
+
+---
+
+### Risk 6 — RatesManager Depends on Unauthenticated Free-Tier External API (LOW)
+
+`service/rates.go` fetches `https://open.er-api.com/v6/latest/USD` with no API key. At a 12-hour interval, a single instance consumes ~60 requests/month against the 1 500/month free tier — safe for the current scale.
+
+On any fetch failure (network error, rate limit, API change), the manager **silently retains the last known in-memory rates** (initialized from hardcoded fallback: `USD=1.0, RUB=90.0, GEL=2.72, EUR=0.92`). After a server restart during an outage, the app starts with the stale fallback values with no log warning or user notification.
+
+**Impact:** Currency converter widget and limit auto-recalculation on currency change will silently use stale rates. No alerting exists.

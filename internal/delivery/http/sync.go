@@ -28,8 +28,11 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		var transactions []syncTransaction
-		if err := json.NewDecoder(r.Body).Decode(&transactions); err != nil {
+		type syncRequest struct {
+			Transactions []syncTransaction `json:"transactions"`
+		}
+		var req syncRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -42,7 +45,7 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 
 		qtx := repository.New(tx)
 
-		for _, t := range transactions {
+		for _, t := range req.Transactions {
 			id, err := stringToUUID(t.ID)
 			if err != nil {
 				tx.Rollback(r.Context())
