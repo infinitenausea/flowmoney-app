@@ -437,6 +437,7 @@ async function loadAnalyticsData() {
           color: catMap[item.category_id]?.color || '#888888',
           icon:  catMap[item.category_id]?.icon  || '💰',
         }));
+        Store.state.analyticsDonut = enriched;
         DonutChart.renderDonutChart('donut-container', enriched);
         renderTimelineFromStore();
         return;
@@ -472,6 +473,7 @@ function _renderLocalDonut(catMapArg) {
     icon:  catMap[catId]?.icon  || '💰',
   }));
 
+  Store.state.analyticsDonut = data;
   DonutChart.renderDonutChart('donut-container', data);
 }
 
@@ -483,9 +485,15 @@ function renderTimelineFromStore() {
 }
 
 function initAnalytics() {
-  // Load analytics data the first time the analytics tab is opened
+  // Load analytics data whenever the analytics tab is opened.
+  // Paint cached data immediately so the chart isn't blank during the async fetch.
   Store.subscribe('currentTab', (tab) => {
-    if (tab === 'analytics') loadAnalyticsData();
+    if (tab !== 'analytics') return;
+    const cached = Store.state.analyticsDonut;
+    if (cached && cached.length > 0) {
+      DonutChart.renderDonutChart('donut-container', cached);
+    }
+    loadAnalyticsData();
   });
 
   // Re-render timeline when category filter changes (tap on donut segment)

@@ -51,7 +51,19 @@ const DonutChart = (() => {
     const total = _lastData.reduce((s, d) => s + _convertTotal(d), 0);
 
     if (!_lastData.length || total === 0) {
-      container.innerHTML = '<p class="donut-empty">Нет расходов за этот месяц</p>';
+      container.innerHTML = `
+        <div class="donut-chart-wrap">
+          <svg class="donut-svg" viewBox="0 0 100 100" width="100%" height="100%"
+               role="img" aria-label="Нет расходов за этот месяц">
+            <circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
+              stroke="var(--hint-color)" stroke-width="${SW}" opacity="0.35"/>
+            <text x="${CX}" y="${CY - 5}" text-anchor="middle" font-size="5.5"
+              fill="var(--hint-color)" font-family="-apple-system,BlinkMacSystemFont,sans-serif">Месяц</text>
+            <text x="${CX}" y="${CY + 9}" text-anchor="middle" font-size="9.5" font-weight="700"
+              fill="var(--hint-color)" font-family="-apple-system,BlinkMacSystemFont,sans-serif">0</text>
+          </svg>
+          <div class="donut-legend"></div>
+        </div>`;
       return;
     }
 
@@ -104,7 +116,7 @@ const DonutChart = (() => {
 
     container.innerHTML = `
       <div class="donut-chart-wrap">
-        <svg class="donut-svg" viewBox="0 0 100 100" role="img" aria-label="Расходы по категориям">
+        <svg class="donut-svg" viewBox="0 0 100 100" width="100%" height="100%" role="img" aria-label="Расходы по категориям">
           <circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
             stroke="var(--secondary-bg-color)" stroke-width="${SW}"/>
           ${segsHTML}
