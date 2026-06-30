@@ -215,9 +215,10 @@ const DonutChart = (() => {
         // Fallback: catMap built from the passed categories argument
         const category     = (Store.state.categories || []).find(c => String(c.id) === String(tx.category_id));
         const cat          = category || catMap[tx.category_id] || {};
-        const color        = cat.color || '#888888';
+        const isDeleted    = !!cat.is_deleted;
+        const color        = isDeleted ? '#888888' : (cat.color || '#888888');
         const categoryIcon = cat.icon  || '💰';
-        const categoryName = cat.name  || 'Неизвестная';
+        const categoryName = isDeleted ? 'Удалено' : (cat.name || 'Неизвестная');
         const cur          = Store.state.currency || 'RUB';
         const txCurrency   = tx.currency || cur;
         const rates        = Store.state.rates || {};

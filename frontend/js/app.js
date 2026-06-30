@@ -239,11 +239,28 @@ const NumPad = (() => {
 ═══════════════════════════════════════════════════ */
 
 const CategoryCreationSheet = (() => {
-  const EMOJIS = ['🍕','🚇','🛍️','💊','☕','⚽','🏠','💡','💰','🎮','🎨','✈️'];
-  const COLORS = ['#FF6B6B','#4ECDC4','#45B7D1','#96CEB4','#FFB347','#DDA0DD','#98D8C8','#A29BFE'];
+  const EMOJIS = [
+    // Finance
+    '💰','💳','🏦','💸','🪙','📈',
+    // Transport
+    '🚇','🚗','✈️','🛵','🚌','⛽',
+    // Leisure
+    '🎮','🎨','🎬','⚽','🎸','📚',
+    // Health
+    '💊','🏋️','🧘','🍎',
+    // Utilities & Home
+    '🏠','💡','🛒','☕',
+  ];
+  const COLORS = [
+    '#FF6B6B','#FF8E53','#FFD93D','#6BCB77',
+    '#4ECDC4','#45B7D1','#4D96FF','#A29BFE',
+    '#C77DFF','#FF6EB4','#98D8C8','#B5BAD0',
+  ];
 
   let _emoji = EMOJIS[0];
   let _color = COLORS[0];
+  let _editMode = false;
+  let _editingCategory = null;
 
   const sheet = document.getElementById('category-creation-sheet');
 
@@ -275,11 +292,24 @@ const CategoryCreationSheet = (() => {
     });
   }
 
-  function open() {
-    _emoji = EMOJIS[0];
-    _color = COLORS[0];
+  function open(categoryObj) {
+    _editMode = !!categoryObj;
+    _editingCategory = categoryObj || null;
+    _emoji = categoryObj ? categoryObj.icon  : EMOJIS[0];
+    _color = categoryObj ? categoryObj.color : COLORS[0];
+
     const nameInput = document.getElementById('cat-sheet-name');
-    if (nameInput) nameInput.value = '';
+    if (nameInput) nameInput.value = categoryObj ? categoryObj.name : '';
+
+    const titleEl = sheet.querySelector('.cat-sheet-title');
+    if (titleEl) titleEl.textContent = _editMode ? 'Редактировать' : 'Новая категория';
+
+    const confirmBtn = document.getElementById('cat-sheet-confirm');
+    if (confirmBtn) confirmBtn.textContent = _editMode ? 'Сохранить' : 'Добавить';
+
+    const deleteBtn = document.getElementById('category-delete-btn');
+    if (deleteBtn) deleteBtn.style.display = _editMode ? 'block' : 'none';
+
     _updatePreview();
     _syncEmojiGrid();
     _syncColorPalette();
@@ -290,6 +320,8 @@ const CategoryCreationSheet = (() => {
   }
 
   function close() {
+    _editMode = false;
+    _editingCategory = null;
     sheet.classList.remove('active');
     setTimeout(() => sheet.setAttribute('aria-hidden', 'true'), 340);
   }
@@ -303,6 +335,15 @@ const CategoryCreationSheet = (() => {
         nameInput.classList.add('error');
         setTimeout(() => nameInput.classList.remove('error'), 400);
       }
+      return;
+    }
+
+    if (_editMode && _editingCategory) {
+      const updated = { ..._editingCategory, name, icon: _emoji, color: _color };
+      tg?.HapticFeedback?.impactOccurred('medium');
+      StorageManager.updateUserCategory(updated);
+      SyncRunner.syncWithBackend();
+      close();
       return;
     }
 
@@ -322,6 +363,14 @@ const CategoryCreationSheet = (() => {
     close();
   }
 
+  function _delete() {
+    if (!_editingCategory) return;
+    tg?.HapticFeedback?.notificationOccurred?.('warning');
+    StorageManager.updateUserCategory({ ..._editingCategory, is_deleted: true });
+    SyncRunner.syncWithBackend();
+    close();
+  }
+
   function init() {
     if (!sheet) return;
 
@@ -333,6 +382,9 @@ const CategoryCreationSheet = (() => {
 
     const confirmBtn = document.getElementById('cat-sheet-confirm');
     if (confirmBtn) confirmBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); _confirm(); });
+
+    const deleteBtn = document.getElementById('category-delete-btn');
+    if (deleteBtn) deleteBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); _delete(); });
 
     // Build emoji grid via createElement (XSS-safe; values are hardcoded)
     const grid = document.getElementById('cat-emoji-grid');
@@ -407,7 +459,7 @@ const CategoryCarousel = (() => {
     carousel.textContent = '';
 
     const fragment = document.createDocumentFragment();
-    categories.forEach(cat => {
+    categories.filter(cat => !cat.is_deleted).forEach(cat => {
       const item = document.createElement('div');
       item.className = 'category-item';
       item.setAttribute('role', 'option');
@@ -461,6 +513,8 @@ const CategoryCarousel = (() => {
     // Added once in init() so re-renders (render()) never stack up listeners.
     const carousel = document.getElementById('category-carousel');
     if (carousel) {
+      let _longPressTimer = null;
+
       carousel.addEventListener('pointerdown', (e) => {
         if (e.target.closest('.category-add-btn')) {
           e.preventDefault();
@@ -482,7 +536,19 @@ const CategoryCarousel = (() => {
         item.classList.add('selected');
         item.setAttribute('aria-selected', 'true');
         Store.state.selectedCategory = item.dataset.id;
+
+        _longPressTimer = setTimeout(() => {
+          _longPressTimer = null;
+          tg?.HapticFeedback?.notificationOccurred?.('warning');
+          const cat = (Store.state.categories || []).find(c => String(c.id) === item.dataset.id);
+          if (cat) CategoryCreationSheet.open(cat);
+        }, 600);
       });
+
+      const _cancelLongPress = () => { clearTimeout(_longPressTimer); _longPressTimer = null; };
+      carousel.addEventListener('pointerup',     _cancelLongPress);
+      carousel.addEventListener('pointermove',   _cancelLongPress);
+      carousel.addEventListener('pointercancel', _cancelLongPress);
     }
 
     // Re-render when server categories arrive (or when user adds a new one)

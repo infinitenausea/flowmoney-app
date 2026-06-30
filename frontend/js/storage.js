@@ -47,6 +47,19 @@ const StorageManager = (() => {
     Store.state.transactions = [..._transactions];
     console.info('[Storage] Loaded', _transactions.length, 'transaction(s) from localStorage');
 
+    // Migration: evict cached data that pre-dates the `synced` field
+    try {
+      const rawMigCheck = localStorage.getItem(CATEGORIES_KEY);
+      if (rawMigCheck) {
+        const parsed = JSON.parse(rawMigCheck);
+        const hasLegacy = Array.isArray(parsed) && parsed.some(c => !('synced' in c));
+        if (hasLegacy) {
+          localStorage.removeItem(CATEGORIES_KEY);
+          console.info('[Storage] Evicted legacy user categories (missing synced field)');
+        }
+      }
+    } catch (e) { /* ignore — next block will handle corrupt data */ }
+
     // Load user-created categories
     try {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);
@@ -237,6 +250,24 @@ const StorageManager = (() => {
   }
 
   /**
+   * Обновляет существующую пользовательскую категорию (редактирование / мягкое удаление).
+   * @param {Object} cat — категория с обновлёнными полями; cat.id должен существовать
+   */
+  function updateUserCategory(cat) {
+    const idx = _userCategories.findIndex(c => c.id === cat.id);
+    if (idx === -1) return;
+    _userCategories[idx] = { ...cat, synced: false };
+    try {
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
+    } catch (e) {
+      console.warn('[Storage] Failed to persist user categories:', e.message);
+    }
+    Store.state.categories = (Store.state.categories || []).map(c =>
+      c.id === cat.id ? _userCategories[idx] : c
+    );
+  }
+
+  /**
    * Возвращает категории, ещё не отправленные на сервер.
    * @returns {Object[]}
    */
@@ -279,7 +310,7 @@ const StorageManager = (() => {
     return JSON.parse(JSON.stringify(_transactions));
   }
 
-  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, getUserCategories, getUnsyncedCategories, markCategoriesAsSynced, _dump };
+  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, updateUserCategory, getUserCategories, getUnsyncedCategories, markCategoriesAsSynced, _dump };
 })();
 
 window.StorageManager = StorageManager;
