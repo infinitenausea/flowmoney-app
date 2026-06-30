@@ -343,6 +343,7 @@ const StorageManager = (() => {
     const result = getUserCategories();
     Store.state.categories = result;
     Store.state.transactions = [...(Store.state.transactions || [])];
+    if (!isBootstrap) CategoryCarousel.render(result);
     return result;
   }
 
