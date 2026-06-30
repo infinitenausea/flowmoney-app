@@ -216,9 +216,9 @@ const DonutChart = (() => {
         const category     = (Store.state.categories || []).find(c => String(c.id) === String(tx.category_id));
         const cat          = category || catMap[tx.category_id] || {};
         const isDeleted    = !!cat.is_deleted;
-        const color        = isDeleted ? '#888888' : (cat.color || '#888888');
+        const color        = cat.color || '#888888';
         const categoryIcon = cat.icon  || '💰';
-        const categoryName = isDeleted ? 'Удалено' : (cat.name || 'Неизвестная');
+        const categoryName = cat.name  || 'Неизвестная';
         const cur          = Store.state.currency || 'RUB';
         const txCurrency   = tx.currency || cur;
         const rates        = Store.state.rates || {};
@@ -230,7 +230,7 @@ const DonutChart = (() => {
 
         // Root item element
         const itemEl = document.createElement('div');
-        itemEl.className = 'timeline-item';
+        itemEl.className = 'timeline-item' + (isDeleted ? ' timeline-item--archived' : '');
         itemEl.dataset.txId = tx.id;
 
         // Content row

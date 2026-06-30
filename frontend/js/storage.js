@@ -292,8 +292,10 @@ const StorageManager = (() => {
     const serverIds = new Set(serverCats.map(c => String(c.id)));
     for (const [id, local] of localMap) {
       if (!serverIds.has(id) && (isBootstrap || local.synced === true)) {
-        localMap.delete(id);
-        changed = true;
+        if (!local.is_deleted) {
+          localMap.set(id, { ...local, is_deleted: true, synced: true });
+          changed = true;
+        }
       }
     }
 
@@ -302,7 +304,11 @@ const StorageManager = (() => {
       const local = localMap.get(id);
 
       if (serverCat.is_deleted === true) {
-        if (localMap.has(id)) { localMap.delete(id); changed = true; }
+        const existing = localMap.get(id);
+        if (existing && !existing.is_deleted) {
+          localMap.set(id, { ...existing, is_deleted: true, synced: true });
+          changed = true;
+        }
         return;
       }
 
@@ -315,14 +321,8 @@ const StorageManager = (() => {
       changed = true;
     });
 
-    // Evict locally soft-deleted categories that have been confirmed synced —
-    // the server will no longer include them in its response, so they are done.
-    for (const [id, local] of localMap) {
-      if (local.is_deleted === true && local.synced === true) {
-        localMap.delete(id);
-        changed = true;
-      }
-    }
+    // Archived (is_deleted) categories are retained in the store so that
+    // existing transactions can still resolve their name and color.
 
     _userCategories = Array.from(localMap.values());
 
@@ -353,7 +353,7 @@ const StorageManager = (() => {
    * @returns {Object[]}
    */
   function getUnsyncedCategories() {
-    return _userCategories.filter(c => !c.synced || c.is_deleted === true);
+    return _userCategories.filter(c => !c.synced);
   }
 
   /**
@@ -367,11 +367,6 @@ const StorageManager = (() => {
       if (idSet.has(c.id)) { changed = true; return { ...c, synced: true }; }
       return c;
     });
-
-    // Evict soft-deleted entries now confirmed on the server — remove from runtime and Store.
-    const prevLen = _userCategories.length;
-    _userCategories = _userCategories.filter(c => c.is_deleted !== true);
-    if (_userCategories.length !== prevLen) changed = true;
 
     if (changed) {
       try {

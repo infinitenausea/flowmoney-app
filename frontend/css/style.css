@@ -785,6 +785,10 @@ button {
   border-bottom: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
 }
 
+.timeline-item--archived {
+  opacity: 0.55;
+}
+
 /* Inner flex row — this is what slides on swipe */
 .timeline-item-content {
   display: flex;

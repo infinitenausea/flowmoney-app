@@ -470,17 +470,19 @@ const CategoryCarousel = (() => {
 
     // Preserve selected category across re-renders
     const prevSelectedId = Store.state.selectedCategory;
-    const nonDeletedCategories = categories.filter(cat => !cat.is_deleted);
+    // Archived categories (is_deleted) stay in the store for history resolution
+    // but must never appear in the creation carousel.
+    const activeCategories = categories.filter(c => !c.is_deleted);
 
     // If previously selected category was deleted, clear the selection
-    if (prevSelectedId && !nonDeletedCategories.some(cat => cat.id === prevSelectedId)) {
+    if (prevSelectedId && !activeCategories.some(cat => cat.id === prevSelectedId)) {
       Store.state.selectedCategory = null;
     }
 
     carousel.textContent = '';
 
     const fragment = document.createDocumentFragment();
-    nonDeletedCategories.forEach(cat => {
+    activeCategories.forEach(cat => {
       const item = document.createElement('div');
       item.className = 'category-item';
       item.setAttribute('role', 'option');
