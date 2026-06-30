@@ -514,18 +514,18 @@ const CategoryCarousel = (() => {
     const carousel = document.getElementById('category-carousel');
     if (carousel) {
       let _longPressTimer = null;
+      let _startX = 0;
+      let _startY = 0;
+      let _longPressFired = false;
+      const MOVE_THRESHOLD = 10;
+      const LONG_PRESS_MS = 500;
 
-      carousel.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('.category-add-btn')) {
-          e.preventDefault();
-          tg?.HapticFeedback?.impactOccurred('light');
-          CategoryCreationSheet.open();
-          return;
-        }
+      const _cancelLongPress = () => {
+        clearTimeout(_longPressTimer);
+        _longPressTimer = null;
+      };
 
-        const item = e.target.closest('.category-item');
-        if (!item) return;
-
+      const _onPressStart = (item, x, y) => {
         tg?.HapticFeedback?.impactOccurred('light');
 
         carousel.querySelectorAll('.category-item.selected').forEach(el => {
@@ -537,18 +537,87 @@ const CategoryCarousel = (() => {
         item.setAttribute('aria-selected', 'true');
         Store.state.selectedCategory = item.dataset.id;
 
+        _startX = x;
+        _startY = y;
+        _longPressFired = false;
+
+        _cancelLongPress();
         _longPressTimer = setTimeout(() => {
           _longPressTimer = null;
+          _longPressFired = true;
           tg?.HapticFeedback?.notificationOccurred?.('warning');
           const cat = (Store.state.categories || []).find(c => String(c.id) === item.dataset.id);
           if (cat) CategoryCreationSheet.open(cat);
-        }, 600);
-      });
+        }, LONG_PRESS_MS);
+      };
 
-      const _cancelLongPress = () => { clearTimeout(_longPressTimer); _longPressTimer = null; };
-      carousel.addEventListener('pointerup',     _cancelLongPress);
-      carousel.addEventListener('pointermove',   _cancelLongPress);
-      carousel.addEventListener('pointercancel', _cancelLongPress);
+      const _onPressMove = (x, y) => {
+        if (!_longPressTimer) return;
+        if (Math.abs(x - _startX) > MOVE_THRESHOLD || Math.abs(y - _startY) > MOVE_THRESHOLD) {
+          _cancelLongPress();
+        }
+      };
+
+      const _supportsTouch = 'ontouchstart' in window;
+
+      if (_supportsTouch) {
+        carousel.addEventListener('touchstart', (e) => {
+          if (e.target.closest('.category-add-btn')) {
+            e.preventDefault();
+            tg?.HapticFeedback?.impactOccurred('light');
+            CategoryCreationSheet.open();
+            return;
+          }
+
+          const item = e.target.closest('.category-item');
+          if (!item) return;
+
+          const touch = e.touches[0];
+          _onPressStart(item, touch.clientX, touch.clientY);
+        }, { passive: true });
+
+        carousel.addEventListener('touchmove', (e) => {
+          const touch = e.touches[0];
+          if (!touch) return;
+          _onPressMove(touch.clientX, touch.clientY);
+        }, { passive: true });
+
+        carousel.addEventListener('touchend', (e) => {
+          if (_longPressFired) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          _cancelLongPress();
+        });
+
+        carousel.addEventListener('touchcancel', _cancelLongPress);
+      } else {
+        carousel.addEventListener('pointerdown', (e) => {
+          if (e.target.closest('.category-add-btn')) {
+            e.preventDefault();
+            tg?.HapticFeedback?.impactOccurred('light');
+            CategoryCreationSheet.open();
+            return;
+          }
+
+          const item = e.target.closest('.category-item');
+          if (!item) return;
+
+          _onPressStart(item, e.clientX, e.clientY);
+        });
+
+        carousel.addEventListener('pointermove', (e) => _onPressMove(e.clientX, e.clientY));
+
+        carousel.addEventListener('pointerup', (e) => {
+          if (_longPressFired) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          _cancelLongPress();
+        });
+
+        carousel.addEventListener('pointercancel', _cancelLongPress);
+      }
     }
 
     // Re-render when server categories arrive (or when user adds a new one)
