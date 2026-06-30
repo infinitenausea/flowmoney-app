@@ -20,6 +20,7 @@ type syncTransaction struct {
 	Amount     float64   `json:"amount"`
 	CreatedAt  time.Time `json:"created_at"`
 	IsDeleted  bool      `json:"is_deleted"`
+	Currency   string    `json:"currency"`
 }
 
 func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
@@ -69,6 +70,10 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				return
 			}
 
+			currency := t.Currency
+			if currency == "" {
+				currency = "USD"
+			}
 			err = qtx.UpsertTransaction(r.Context(), repository.UpsertTransactionParams{
 				ID:         id,
 				UserID:     tgID,
@@ -76,6 +81,7 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				Amount:     float64ToNumeric(t.Amount),
 				CreatedAt:  pgtype.Timestamptz{Time: t.CreatedAt, Valid: true},
 				IsDeleted:  t.IsDeleted,
+				Currency:   currency,
 			})
 			if err != nil {
 				log.Printf("SYNC ERROR: upsert tx %s: %v", t.ID, err)

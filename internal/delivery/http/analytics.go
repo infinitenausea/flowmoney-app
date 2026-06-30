@@ -20,6 +20,7 @@ type timelineItem struct {
 	ID         string    `json:"id"`
 	CategoryID string    `json:"category_id"`
 	Amount     float64   `json:"amount"`
+	Currency   string    `json:"currency"`
 	CreatedAt  time.Time `json:"created_at"`
 	IsDeleted  bool      `json:"is_deleted"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -34,6 +35,7 @@ type deltaItem struct {
 	ID         string    `json:"id"`
 	CategoryID string    `json:"category_id"`
 	Amount     float64   `json:"amount"`
+	Currency   string    `json:"currency"`
 	CreatedAt  time.Time `json:"created_at"`
 	IsDeleted  bool      `json:"is_deleted"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -61,7 +63,7 @@ func NewGetAnalyticsDonutHandler(q repository.Querier) http.HandlerFunc {
 		for _, row := range rows {
 			result = append(result, donutItem{
 				CategoryID: uuidToString(row.CategoryID),
-				Total:      numericToFloat64(row.Total),
+				Total:      row.Total,
 			})
 		}
 
@@ -101,6 +103,7 @@ func NewGetTimelineHandler(q repository.Querier) http.HandlerFunc {
 					ID:         uuidToString(row.ID),
 					CategoryID: uuidToString(row.CategoryID),
 					Amount:     numericToFloat64(row.Amount),
+					Currency:   row.Currency,
 					CreatedAt:  row.CreatedAt.Time,
 					IsDeleted:  row.IsDeleted,
 					UpdatedAt:  row.UpdatedAt.Time,
@@ -149,6 +152,7 @@ func NewGetTimelineHandler(q repository.Querier) http.HandlerFunc {
 				ID:         uuidToString(row.ID),
 				CategoryID: uuidToString(row.CategoryID),
 				Amount:     numericToFloat64(row.Amount),
+				Currency:   row.Currency,
 				CreatedAt:  row.CreatedAt.Time,
 				IsDeleted:  row.IsDeleted,
 				UpdatedAt:  row.UpdatedAt.Time,

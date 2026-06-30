@@ -12,7 +12,7 @@ import (
 )
 
 const getAnalyticsDonut = `-- name: GetAnalyticsDonut :many
-SELECT category_id, SUM(amount) AS total
+SELECT category_id, SUM(amount)::FLOAT8 AS total
 FROM transactions
 WHERE user_id   = $1
   AND is_deleted = false
@@ -22,8 +22,8 @@ GROUP BY category_id
 `
 
 type GetAnalyticsDonutRow struct {
-	CategoryID pgtype.UUID    `json:"category_id"`
-	Total      pgtype.Numeric `json:"total"`
+	CategoryID pgtype.UUID `json:"category_id"`
+	Total      float64     `json:"total"`
 }
 
 func (q *Queries) GetAnalyticsDonut(ctx context.Context, userID int64) ([]GetAnalyticsDonutRow, error) {
@@ -100,7 +100,7 @@ func (q *Queries) GetCategoriesByUserId(ctx context.Context, userID int64) ([]Ca
 }
 
 const getTimelineWithCursor = `-- name: GetTimelineWithCursor :many
-SELECT id, user_id, category_id, amount, created_at, is_deleted, updated_at
+SELECT id, user_id, category_id, amount, created_at, is_deleted, updated_at, currency
 FROM transactions
 WHERE user_id   = $1
   AND is_deleted = false
@@ -132,6 +132,7 @@ func (q *Queries) GetTimelineWithCursor(ctx context.Context, arg GetTimelineWith
 			&i.CreatedAt,
 			&i.IsDeleted,
 			&i.UpdatedAt,
+			&i.Currency,
 		); err != nil {
 			return nil, err
 		}
@@ -144,7 +145,7 @@ func (q *Queries) GetTimelineWithCursor(ctx context.Context, arg GetTimelineWith
 }
 
 const getTransactionsDelta = `-- name: GetTransactionsDelta :many
-SELECT id, category_id, amount, created_at, is_deleted, updated_at
+SELECT id, category_id, amount, created_at, is_deleted, updated_at, currency
 FROM transactions
 WHERE user_id = $1 AND updated_at > $2
 ORDER BY updated_at ASC
@@ -162,6 +163,7 @@ type GetTransactionsDeltaRow struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	IsDeleted  bool               `json:"is_deleted"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	Currency   string             `json:"currency"`
 }
 
 func (q *Queries) GetTransactionsDelta(ctx context.Context, arg GetTransactionsDeltaParams) ([]GetTransactionsDeltaRow, error) {
@@ -180,6 +182,7 @@ func (q *Queries) GetTransactionsDelta(ctx context.Context, arg GetTransactionsD
 			&i.CreatedAt,
 			&i.IsDeleted,
 			&i.UpdatedAt,
+			&i.Currency,
 		); err != nil {
 			return nil, err
 		}
@@ -232,12 +235,13 @@ func (q *Queries) UpsertBudget(ctx context.Context, arg UpsertBudgetParams) erro
 }
 
 const upsertTransaction = `-- name: UpsertTransaction :exec
-INSERT INTO transactions (id, user_id, category_id, amount, created_at, is_deleted)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO transactions (id, user_id, category_id, amount, created_at, is_deleted, currency)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO UPDATE
 SET category_id = EXCLUDED.category_id,
     amount      = EXCLUDED.amount,
     is_deleted  = EXCLUDED.is_deleted,
+    currency    = EXCLUDED.currency,
     updated_at  = NOW()
 `
 
@@ -248,6 +252,7 @@ type UpsertTransactionParams struct {
 	Amount     pgtype.Numeric     `json:"amount"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	IsDeleted  bool               `json:"is_deleted"`
+	Currency   string             `json:"currency"`
 }
 
 func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionParams) error {
@@ -258,6 +263,7 @@ func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionPa
 		arg.Amount,
 		arg.CreatedAt,
 		arg.IsDeleted,
+		arg.Currency,
 	)
 	return err
 }
