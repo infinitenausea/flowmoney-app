@@ -22,6 +22,7 @@ type timelineItem struct {
 	Amount     float64   `json:"amount"`
 	CreatedAt  time.Time `json:"created_at"`
 	IsDeleted  bool      `json:"is_deleted"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type timelineResponse struct {
@@ -150,6 +151,7 @@ func NewGetTimelineHandler(q repository.Querier) http.HandlerFunc {
 				Amount:     numericToFloat64(row.Amount),
 				CreatedAt:  row.CreatedAt.Time,
 				IsDeleted:  row.IsDeleted,
+				UpdatedAt:  row.UpdatedAt.Time,
 			})
 		}
 
