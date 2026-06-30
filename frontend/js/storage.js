@@ -188,8 +188,11 @@ const StorageManager = (() => {
         return;
       }
 
-      const normalized = { ...serverTx, amount: parseFloat(serverTx.amount) || 0, synced: true, _pending: false };
       const local = localMap.get(serverTx.id);
+      // Preserve currency from local record — server never sends this field.
+      // For brand-new server-only records fall back to current app currency.
+      const currency = (local && local.currency) || serverTx.currency || Store.state.currency || 'RUB';
+      const normalized = { ...serverTx, amount: parseFloat(serverTx.amount) || 0, currency, synced: true, _pending: false };
       if (!local) {
         localMap.set(serverTx.id, normalized);
         changed = true;

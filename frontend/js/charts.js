@@ -336,15 +336,25 @@ const DonutChart = (() => {
     const total = _lastData.reduce((s, d) => s + (d.total || 0), 0);
 
     const svgTexts = container.querySelectorAll('.donut-svg text');
+    if (svgTexts[0]) {
+      // DEBUG: show freshData summary in center label so we can verify on device.
+      // Remove after confirming conversion works.
+      const dbg = _lastData.map(d => d.category_id.slice(0,4) + ':' + d.total.toFixed(0)).join(' ');
+      svgTexts[0].textContent = cur + ' ' + dbg;
+    }
     if (svgTexts[1]) {
       const focused   = _selectedCatId ? _lastData.find(d => d.category_id === _selectedCatId) : null;
       const centerAmt = focused ? (focused.total || 0) : total;
       svgTexts[1].textContent = centerAmt.toFixed(2) + ' ' + sym;
     }
 
-    const amtEls = container.querySelectorAll('.donut-legend-amt');
-    amtEls.forEach((el, i) => {
-      if (_lastData[i]) el.textContent = _fmtLegendAmt(_lastData[i].total, cur);
+    // Match legend items by category UUID, not array index.
+    const legendItems = container.querySelectorAll('.donut-legend-item');
+    legendItems.forEach(itemEl => {
+      const entry = _lastData.find(d => d.category_id === itemEl.dataset.catId);
+      if (!entry) return;
+      const amtEl = itemEl.querySelector('.donut-legend-amt');
+      if (amtEl) amtEl.textContent = _fmtLegendAmt(entry.total, cur);
     });
   }
 

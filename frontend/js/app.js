@@ -456,13 +456,16 @@ function computeLocalDonutData() {
     return txTime >= start && txTime <= end;
   });
 
+  const appCur = (Store.state.currency || 'RUB').toUpperCase();
+  const rates  = Store.state.rates || {};
+
   const groups = {};
   filteredTxs.forEach(tx => {
-    const txCurrency = tx.currency || Store.state.currency;
+    const txCurrency = (tx.currency || appCur).toUpperCase();
     let amountInAppCurrency = parseFloat(tx.amount) || 0;
 
-    if (txCurrency !== Store.state.currency && Store.state.rates[txCurrency] && Store.state.rates[Store.state.currency]) {
-      amountInAppCurrency = (amountInAppCurrency / Store.state.rates[txCurrency]) * Store.state.rates[Store.state.currency];
+    if (txCurrency !== appCur && rates[txCurrency] && rates[appCur]) {
+      amountInAppCurrency = (amountInAppCurrency / rates[txCurrency]) * rates[appCur];
     }
 
     groups[tx.category_id] = (groups[tx.category_id] || 0) + amountInAppCurrency;
