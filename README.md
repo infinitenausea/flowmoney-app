@@ -7,10 +7,12 @@ Personal finance tracker built as a Telegram Mini App. Users log expenses direct
 ## Features
 
 - **Expense tracking** — add transactions via a numpad UI, grouped by category
-- **Budget limits** — set daily, weekly, and monthly spending limits with live progress indicators
-- **Analytics** — donut chart for monthly spend by category + paginated transaction timeline
-- **Currency converter** — exchange rates widget with live auto-recalculation of limits
-- **Offline-first** — transactions are saved to `localStorage` and synced to the server when online
+- **Expense tracking with comments** — add transactions via a numpad UI, grouped by user-defined category; optional free-text comment per transaction
+- **Custom categories** — create, edit, and soft-delete personal categories (icon + color picker); synced across devices
+- **Budget limits** — set weekly and monthly spending limits with live progress indicators
+- **Analytics** — donut chart for any date range (day / month / custom) aggregated client-side + paginated transaction timeline; swipe left to delete, swipe right to duplicate
+- **Currency converter** — exchange rates widget (USD/RUB/GEL/EUR) with live auto-recalculation of limits
+- **Offline-first** — transactions and categories are saved to `localStorage` and synced to the server when online; 15 s background tick + online-event trigger
 - **Telegram-native** — follows Telegram theme (dark/light), respects system gestures, no zoom
 
 ---
@@ -56,11 +58,16 @@ FlowMoney-app/
 
 ### Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (see `.env.example`):
 
 ```env
-BOT_TOKEN=your_telegram_bot_token
-DATABASE_URL=postgres://flowmoney:flowmoney@postgres:5432/flowmoney?sslmode=disable
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+DB_USER=flowmoney
+DB_PASSWORD=secret
+DB_NAME=flowmoney
+DB_HOST=postgres
+DB_PORT=5432
+DB_SSLMODE=disable
 PORT=8082
 ```
 
@@ -79,7 +86,7 @@ The app listens on port `8082`. Point your reverse proxy (Caddy/nginx) at it and
 go run ./cmd/app
 ```
 
-Migrations run automatically on startup via the custom shell runner (tracked in `_schema_migrations`).
+Migrations are applied by the CI/CD pipeline (`deploy.yml`) after each deploy via a homegrown shell runner tracked in `_schema_migrations`. They do **not** run automatically on Go startup — apply manually with `psql` when developing locally.
 
 ---
 
@@ -90,10 +97,11 @@ All protected routes require `Authorization: Telegram <initData>` header.
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/health` | — | Liveness probe |
-| `GET` | `/api/v1/bootstrap` | ✓ | Load initial state (currency, budget, categories) |
-| `POST` | `/api/v1/sync` | ✓ | Batch upsert transactions |
-| `GET` | `/api/v1/analytics/donut` | ✓ | Monthly spend by category |
-| `GET` | `/api/v1/analytics/timeline` | ✓ | Paginated transaction history |
+| `GET` | `/api/v1/bootstrap` | ✓ | Load initial state (currency, budget, categories, exchange rates) |
+| `POST` | `/api/v1/sync` | ✓ | Batch upsert transactions **and categories** in a single DB transaction |
+| `PUT` | `/api/v1/settings` | ✓ | Update currency and budget limits |
+| `GET` | `/api/v1/analytics/timeline` | ✓ | Delta sync (`?since=`) or cursor pagination (`?cursor=&limit=`) |
+| `GET` | `/api/v1/analytics/donut` | ✓ | Server-side monthly aggregation — **registered but unused**; frontend uses client-side computation |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full JSON contracts and data model.
 
