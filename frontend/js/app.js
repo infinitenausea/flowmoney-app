@@ -315,14 +315,105 @@ const CategoryCarousel = (() => {
 })();
 
 /* ═══════════════════════════════════════════════════
+   6а. BudgetCard — переключатель Неделя / Месяц
+═══════════════════════════════════════════════════ */
+
+const BudgetCard = (() => {
+  let _period = 'week'; // 'week' | 'month'
+
+  function _computeAvailable(period) {
+    const limit = period === 'week'
+      ? (Store.state.weeklyLimit  || 0)
+      : (Store.state.monthlyLimit || 0);
+    if (!limit) return null;
+
+    const txs    = Store.state.transactions || [];
+    const now    = new Date();
+    const rates  = Store.state.rates || {};
+    const appCur = (Store.state.currency || 'RUB').toUpperCase();
+
+    let start;
+    if (period === 'week') {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+      start.setHours(0, 0, 0, 0);
+    } else {
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    }
+
+    const spent = txs
+      .filter(tx => !tx.is_deleted && new Date(tx.created_at) >= start)
+      .reduce((sum, tx) => {
+        const txCur = (tx.currency || appCur).toUpperCase();
+        let amt = parseFloat(tx.amount) || 0;
+        if (txCur !== appCur && rates[txCur] && rates[appCur]) {
+          amt = (amt / rates[txCur]) * rates[appCur];
+        }
+        return sum + amt;
+      }, 0);
+
+    return limit - spent;
+  }
+
+  function _render() {
+    const el    = document.getElementById('budget-available');
+    if (!el) return;
+
+    const limit = _period === 'week'
+      ? (Store.state.weeklyLimit  || 0)
+      : (Store.state.monthlyLimit || 0);
+    const val = _computeAvailable(_period);
+
+    if (val === null) {
+      el.textContent = '—';
+      el.className = 'budget-amount';
+      return;
+    }
+
+    el.textContent = formatCurrency(val, Store.state.currency);
+    el.className = 'budget-amount';
+    if (limit > 0) {
+      const ratio = val / limit;
+      if      (ratio <= 0)   el.classList.add('danger');
+      else if (ratio < 0.3)  el.classList.add('warning');
+    }
+  }
+
+  function init() {
+    const toggle = document.getElementById('budget-period-toggle');
+    if (toggle) {
+      toggle.addEventListener('pointerdown', (e) => {
+        const opt = e.target.closest('[data-period]');
+        if (!opt || opt.dataset.period === _period) return;
+        e.preventDefault();
+
+        _period = opt.dataset.period;
+        toggle.querySelectorAll('[data-period]').forEach(el => {
+          el.classList.toggle('active', el.dataset.period === _period);
+        });
+
+        tg?.HapticFeedback?.selectionChanged?.();
+        _render();
+      });
+    }
+
+    Store.subscribe('weeklyLimit',  _render);
+    Store.subscribe('monthlyLimit', _render);
+    Store.subscribe('transactions', _render);
+    Store.subscribe('currency',     _render);
+    Store.subscribe('rates',        _render);
+  }
+
+  return { init };
+})();
+
+/* ═══════════════════════════════════════════════════
    6. Реактивные биндинги DOM ← Store
 ═══════════════════════════════════════════════════ */
 
 function initBindings() {
-  const amountDisplay   = document.getElementById('amount-display');
-  const dailyAvailable  = document.getElementById('daily-available');
-  const btnAdd          = document.getElementById('btn-add');
-  const currencySymbol  = document.getElementById('currency-symbol');
+  const amountDisplay  = document.getElementById('amount-display');
+  const btnAdd         = document.getElementById('btn-add');
+  const currencySymbol = document.getElementById('currency-symbol');
 
   // Дисплей суммы
   Store.subscribe('inputAmount', (val) => {
@@ -333,28 +424,6 @@ function initBindings() {
 
   // Выбор категории влияет на кнопку
   Store.subscribe('selectedCategory', () => updateAddButton());
-
-  // Доступный дневной бюджет + цветовой градиент
-  Store.subscribe('dailyAvailable', (val) => {
-    if (!dailyAvailable) return;
-    const limit = Store.state.dailyLimit;
-
-    if (val === null || val === undefined) {
-      dailyAvailable.textContent = '—';
-      return;
-    }
-
-    const formatted = formatCurrency(val, Store.state.currency);
-    dailyAvailable.textContent = formatted;
-
-    // Цветовая семантика: зелёный → коралловый (спека 3.1)
-    dailyAvailable.classList.remove('warning', 'danger');
-    if (limit > 0) {
-      const ratio = val / limit;
-      if (ratio <= 0)    dailyAvailable.classList.add('danger');
-      else if (ratio < 0.3) dailyAvailable.classList.add('warning');
-    }
-  });
 
   // Символ валюты + обновление текстовых меток пончика (без перерисовки SVG-сегментов)
   Store.subscribe('currency', (val) => {
@@ -813,16 +882,12 @@ async function bootstrap() {
     const budget = data.budget || {};
 
     Store.batchUpdate({
-      currency:     data.currency         || 'RUB',
-      dailyLimit:   budget.daily_limit    || 0,
-      weeklyLimit:  budget.weekly_limit   || 0,
-      monthlyLimit: budget.monthly_limit  || 0,
-      categories:   data.categories       || [],
-      rates:        data.rates            || {},
+      currency:     data.currency        || 'RUB',
+      weeklyLimit:  budget.weekly_limit  || 0,
+      monthlyLimit: budget.monthly_limit || 0,
+      categories:   data.categories      || [],
+      rates:        data.rates           || {},
     });
-
-    // Recompute daily available now that limits are fresh from server
-    Store.state.dailyAvailable = Settings.computeDailyAvailable();
 
   } catch (err) {
     // Offline-first: не блокируем UI, работаем с локальным состоянием
@@ -901,7 +966,8 @@ async function init() {
   initTheme();
   updateAnalyticsRange();   // вычисляем диапазон до первого рендера аналитики
   StorageManager.init();    // загружаем транзакции из localStorage до рендера
-  Settings.init();          // слайдеры лимитов + daily available
+  Settings.init();          // лимиты + прогресс-бары
+  BudgetCard.init();        // переключатель Неделя/Месяц
   initBindings();
   Router.init();
   NumPad.init();

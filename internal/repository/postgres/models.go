@@ -10,7 +10,6 @@ import (
 
 type Budget struct {
 	UserID       int64          `json:"user_id"`
-	DailyLimit   pgtype.Numeric `json:"daily_limit"`
 	WeeklyLimit  pgtype.Numeric `json:"weekly_limit"`
 	MonthlyLimit pgtype.Numeric `json:"monthly_limit"`
 }

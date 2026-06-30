@@ -2,8 +2,8 @@
  * FlowMoney — Реактивный Store на базе Proxy (спека 2.1)
  *
  * Использование:
- *   store.subscribe('dailyAvailable', (val) => updateDOM(val));
- *   store.state.dailyAvailable = 1200; // автоматически вызовет подписчика
+ *   store.subscribe('weeklyLimit', (val) => updateDOM(val));
+ *   store.state.weeklyLimit = 5000; // автоматически вызовет подписчика
  *
  * Подписки по ключу: только нужный узел DOM обновляется,
  * без тяжёлого Virtual DOM diffing.
@@ -16,10 +16,8 @@ const Store = (() => {
     currency: '₽',
 
     // Бюджет
-    dailyAvailable: null,
-    weeklyLimit:    0,
-    monthlyLimit:   0,
-    dailyLimit:     0,
+    weeklyLimit:  0,
+    monthlyLimit: 0,
 
     // Ввод
     inputAmount:     '',

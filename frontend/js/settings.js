@@ -7,7 +7,7 @@
  *  - Persist limits + currency to localStorage (offline-first)
  *  - Best-effort PUT /api/v1/settings (debounced, silent on failure)
  *  - Weekly / monthly progress bars
- *  - Compute and push dailyAvailable into Store when limits or transactions change
+ *  - Weekly / monthly available is computed by BudgetCard in app.js
  */
 
 const Settings = (() => {
@@ -34,10 +34,9 @@ const Settings = (() => {
     } catch { return null; }
   }
 
-  function _persist(daily, weekly, monthly) {
+  function _persist(weekly, monthly) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        dailyLimit:   daily,
         weeklyLimit:  weekly,
         monthlyLimit: monthly,
       }));
@@ -59,37 +58,13 @@ const Settings = (() => {
             'Authorization': `Telegram ${initData}`,
           },
           body: JSON.stringify({
-            currency:      Store.state.currency      || 'RUB',
-            daily_limit:   Store.state.dailyLimit    || 0,
-            weekly_limit:  Store.state.weeklyLimit   || 0,
-            monthly_limit: Store.state.monthlyLimit  || 0,
+            currency:      Store.state.currency     || 'RUB',
+            weekly_limit:  Store.state.weeklyLimit  || 0,
+            monthly_limit: Store.state.monthlyLimit || 0,
           }),
         });
       } catch { /* silent — offline-first */ }
     }, 1500);
-  }
-
-  // ── Daily available ──────────────────────────────────────────────────────
-
-  function computeDailyAvailable() {
-    const weekly  = Store.state.weeklyLimit  || 0;
-    const monthly = Store.state.monthlyLimit || 0;
-    if (!weekly && !monthly) return null;
-
-    let dailyLimit = Infinity;
-    if (weekly  > 0) dailyLimit = Math.min(dailyLimit, weekly  / 7);
-    if (monthly > 0) dailyLimit = Math.min(dailyLimit, monthly / 30);
-    if (!isFinite(dailyLimit)) dailyLimit = 0;
-
-    Store.state.dailyLimit = dailyLimit;
-
-    const today   = new Date();
-    const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const spent   = (Store.state.transactions || [])
-      .filter(tx => !tx.is_deleted && new Date(tx.created_at).getTime() >= todayMs)
-      .reduce((s, tx) => s + Number(tx.amount), 0);
-
-    return dailyLimit - spent;
   }
 
   // ── Progress bars ────────────────────────────────────────────────────────
@@ -141,11 +116,9 @@ const Settings = (() => {
     const cur = Store.state.currency || 'RUB';
     const fmt = typeof formatCurrency === 'function' ? formatCurrency : (v) => String(v);
 
-    const d = document.getElementById('daily-limit-display');
     const w = document.getElementById('weekly-limit-display');
     const m = document.getElementById('monthly-limit-display');
 
-    if (d) d.textContent = (Store.state.dailyLimit   > 0) ? fmt(Store.state.dailyLimit,   cur) : '—';
     if (w) w.textContent = (Store.state.weeklyLimit  > 0) ? fmt(Store.state.weeklyLimit,  cur) : '—';
     if (m) m.textContent = (Store.state.monthlyLimit > 0) ? fmt(Store.state.monthlyLimit, cur) : '—';
   }
@@ -153,7 +126,6 @@ const Settings = (() => {
   // ── Modal ────────────────────────────────────────────────────────────────
 
   const _TITLES = {
-    daily:   'Дневной лимит',
     weekly:  'Недельный лимит',
     monthly: 'Месячный лимит',
   };
@@ -173,7 +145,6 @@ const Settings = (() => {
       currencyCode  = _converterFrom;
     } else {
       const currentVal = {
-        daily:   Store.state.dailyLimit   || 0,
         weekly:  Store.state.weeklyLimit  || 0,
         monthly: Store.state.monthlyLimit || 0,
       }[limitType] || 0;
@@ -247,10 +218,10 @@ const Settings = (() => {
     }
 
     const amount   = parseFloat(_budgetInput) || 0;
-    const storeKey = { daily: 'dailyLimit', weekly: 'weeklyLimit', monthly: 'monthlyLimit' }[_editingLimit];
+    const storeKey = { weekly: 'weeklyLimit', monthly: 'monthlyLimit' }[_editingLimit];
 
     Store.state[storeKey] = amount;
-    _persist(Store.state.dailyLimit, Store.state.weeklyLimit, Store.state.monthlyLimit);
+    _persist(Store.state.weeklyLimit, Store.state.monthlyLimit);
     _syncToServer();
 
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
@@ -327,11 +298,10 @@ const Settings = (() => {
 
     if (oldCurrency !== newCurrency && rateFrom && rateTo) {
       const factor     = rateTo / rateFrom;
-      const newDaily   = Math.round((Store.state.dailyLimit   || 0) * factor * 100) / 100;
       const newWeekly  = Math.round((Store.state.weeklyLimit  || 0) * factor * 100) / 100;
       const newMonthly = Math.round((Store.state.monthlyLimit || 0) * factor * 100) / 100;
-      Store.batchUpdate({ currency: newCurrency, dailyLimit: newDaily, weeklyLimit: newWeekly, monthlyLimit: newMonthly });
-      _persist(newDaily, newWeekly, newMonthly);
+      Store.batchUpdate({ currency: newCurrency, weeklyLimit: newWeekly, monthlyLimit: newMonthly });
+      _persist(newWeekly, newMonthly);
     } else {
       Store.state.currency = newCurrency;
     }
@@ -346,7 +316,6 @@ const Settings = (() => {
     // Pre-fill Store from localStorage before bootstrap arrives
     const local = _load();
     if (local) {
-      if (!Store.state.dailyLimit   && local.dailyLimit)   Store.state.dailyLimit   = local.dailyLimit;
       if (!Store.state.weeklyLimit  && local.weeklyLimit)  Store.state.weeklyLimit  = local.weeklyLimit;
       if (!Store.state.monthlyLimit && local.monthlyLimit) Store.state.monthlyLimit = local.monthlyLimit;
     }
@@ -462,27 +431,19 @@ const Settings = (() => {
     }
 
     // ── Store → limit displays ───────────────────────────────────────────
-    Store.subscribe('dailyLimit', () => {
-      _refreshLimitDisplays();
-      Store.state.dailyAvailable = computeDailyAvailable();
-    });
-
     Store.subscribe('weeklyLimit', (val) => {
       _refreshLimitDisplays();
-      _persist(Store.state.dailyLimit, val, Store.state.monthlyLimit);
-      Store.state.dailyAvailable = computeDailyAvailable();
+      _persist(val, Store.state.monthlyLimit);
       renderProgressBars();
     });
 
     Store.subscribe('monthlyLimit', (val) => {
       _refreshLimitDisplays();
-      _persist(Store.state.dailyLimit, Store.state.weeklyLimit, val);
-      Store.state.dailyAvailable = computeDailyAvailable();
+      _persist(Store.state.weeklyLimit, val);
       renderProgressBars();
     });
 
     Store.subscribe('transactions', () => {
-      Store.state.dailyAvailable = computeDailyAvailable();
       renderProgressBars();
     });
 
@@ -539,7 +500,7 @@ const Settings = (() => {
     }
   }
 
-  return { init, computeDailyAvailable, renderProgressBars };
+  return { init, renderProgressBars };
 })();
 
 window.Settings = Settings;

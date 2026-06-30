@@ -37,7 +37,6 @@ CREATE INDEX idx_transactions_user_timeline ON transactions(user_id, created_at 
 -- budgets (one row per user, upserted)
 CREATE TABLE budgets (
     user_id       BIGINT         PRIMARY KEY REFERENCES users(tg_id) ON DELETE CASCADE,
-    daily_limit   DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (daily_limit >= 0),
     weekly_limit  DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (weekly_limit >= 0),
     monthly_limit DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (monthly_limit >= 0)
 );

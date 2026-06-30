@@ -6,7 +6,7 @@ ON CONFLICT (tg_id) DO UPDATE
 RETURNING tg_id, currency, created_at, updated_at;
 
 -- name: GetBudgetsByUserId :one
-SELECT user_id, daily_limit, weekly_limit, monthly_limit
+SELECT user_id, weekly_limit, monthly_limit
 FROM budgets
 WHERE user_id = $1;
 
@@ -54,9 +54,8 @@ ORDER BY updated_at ASC;
 UPDATE users SET currency = $2, updated_at = NOW() WHERE tg_id = $1;
 
 -- name: UpsertBudget :exec
-INSERT INTO budgets (user_id, daily_limit, weekly_limit, monthly_limit)
-VALUES ($1, $2, $3, $4)
+INSERT INTO budgets (user_id, weekly_limit, monthly_limit)
+VALUES ($1, $2, $3)
 ON CONFLICT (user_id) DO UPDATE
-SET daily_limit   = EXCLUDED.daily_limit,
-    weekly_limit  = EXCLUDED.weekly_limit,
+SET weekly_limit  = EXCLUDED.weekly_limit,
     monthly_limit = EXCLUDED.monthly_limit;

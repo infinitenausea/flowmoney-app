@@ -24,7 +24,6 @@ type categoryResponse struct {
 }
 
 type budgetResponse struct {
-	DailyLimit   float64 `json:"daily_limit"`
 	WeeklyLimit  float64 `json:"weekly_limit"`
 	MonthlyLimit float64 `json:"monthly_limit"`
 }
@@ -81,7 +80,6 @@ func NewBootstrapHandler(q repository.Querier, rm *service.RatesManager) http.Ha
 		resp := bootstrapResponse{
 			Currency: user.Currency,
 			Budget: budgetResponse{
-				DailyLimit:   numericToFloat64(budget.DailyLimit),
 				WeeklyLimit:  numericToFloat64(budget.WeeklyLimit),
 				MonthlyLimit: numericToFloat64(budget.MonthlyLimit),
 			},

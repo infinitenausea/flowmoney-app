@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push *)",
+      "PowerShell($env:PATH; \\(Get-Command go -ErrorAction SilentlyContinue\\).Source)",
+      "Read(//c/Users/user/go/bin/**)",
+      "Bash(mkdir -p \"c:/Users/user/Desktop/FlowMoney-app/frontend/css\" \"c:/Users/user/Desktop/FlowMoney-app/frontend/js\")",
+      "Bash(python -m http.server 8080)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/)",
+      "Bash(start http://localhost:8080)",
+      "Bash(node -e ' *)",
+      "Bash(git commit -m ' *)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue } | Select-Object Id, ProcessName, CommandLine)",
+      "PowerShell(Stop-Process -Id 13408 -Force)",
+      "PowerShell(Start-Process -FilePath \"go\" -ArgumentList \"run\", \"./cmd/app/...\" -WorkingDirectory \"c:\\\\Users\\\\user\\\\Desktop\\\\FlowMoney-app\" -NoNewWindow -PassThru)",
+      "Bash(curl -s http://localhost:8080/health)",
+      "PowerShell(docker compose -f \"c:\\\\Users\\\\user\\\\Desktop\\\\FlowMoney-app\\\\docker-compose.yml\" ps 2>&1)",
+      "Bash(mkdir -p c:/Users/user/Desktop/FlowMoney-app/.github/workflows)",
+      "Bash(ls -la \"c:\\\\Users\\\\user\\\\Desktop\\\\FlowMoney-app\\\\\" | head -30)",
+      "Read(//c/Users/user/Desktop/**)",
+      "Bash(git -C \"c:\\\\Users\\\\user\\\\Desktop\\\\FlowMoney-app\" add README.md)",
+      "Bash(git -C \"c:\\\\Users\\\\user\\\\Desktop\\\\FlowMoney-app\" commit -m \"docs: add project README\")",
+      "Bash(git -C \"c:\\\\Users\\\\user\\\\Desktop\\\\FlowMoney-app\" push origin main)",
+      "Bash(git -C \"c:/Users/user/Desktop/FlowMoney-app\" status)",
+      "Bash(git -C \"c:/Users/user/Desktop/FlowMoney-app\" diff frontend/js/app.js)",
+      "Bash(git -C \"c:/Users/user/Desktop/FlowMoney-app\" add frontend/js/app.js)",
+      "Bash(git -C c:/Users/user/Desktop/FlowMoney-app commit -m ' *)",
+      "Bash(git -C \"c:/Users/user/Desktop/FlowMoney-app\" push origin main)",
+      "Bash(git -C \"c:/Users/user/Desktop/FlowMoney-app\" diff)",
+      "Bash(git -C \"c:/Users/user/Desktop/FlowMoney-app\" add frontend/js/app.js frontend/js/charts.js)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(xargs grep -l \"router\\\\|mux\\\\|Route\\\\|Handler\")",
+      "Bash(grep -E \"\\\\.sh$|Makefile|\\\\.bat$|\\\\.ps1$|docker\")",
+      "Bash(xargs grep -l \"migrate\\\\|migration\")",
+      "Bash(grep -v \"//\\\\|console\")",
+      "PowerShell(sqlc generate 2>&1)",
+      "PowerShell(sqlc version 2>&1)",
+      "PowerShell(go build ./... 2>&1)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\user\\Desktop\\FlowMoney-app\\frontend",
+      "c:\\Users\\user\\Desktop\\FlowMoney-app\\.github"
+    ]
+  }
+}

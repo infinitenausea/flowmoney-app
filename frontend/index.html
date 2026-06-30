@@ -32,10 +32,14 @@
     ═══════════════════════════════════════ -->
     <section id="screen-home" class="screen active" role="main">
       <div class="screen-content">
-        <!-- Виджет доступного бюджета -->
+        <!-- Виджет бюджета: переключатель Неделя / Месяц -->
         <div class="budget-widget">
-          <p class="budget-label">Доступно сегодня</p>
-          <p id="daily-available" class="budget-amount">—</p>
+          <div class="budget-period-toggle" id="budget-period-toggle">
+            <span class="budget-period-option active" data-period="week">Неделя</span>
+            <span class="budget-period-option" data-period="month">Месяц</span>
+          </div>
+          <p id="budget-available" class="budget-amount">—</p>
+          <p class="budget-label">Доступно</p>
         </div>
 
         <!-- Карусель категорий -->
@@ -140,14 +144,6 @@
         <div class="settings-section">
           <h3 class="settings-section-title">Лимиты расходов</h3>
           <div class="budget-settings">
-
-            <div class="budget-setting-block">
-              <div class="budget-setting-header">
-                <span class="budget-setting-label">Дневной лимит</span>
-                <button class="limit-value limit-value--tap" id="daily-limit-display"
-                        data-limit="daily" aria-label="Изменить дневной лимит">—</button>
-              </div>
-            </div>
 
             <div class="budget-setting-block">
               <div class="budget-setting-header">

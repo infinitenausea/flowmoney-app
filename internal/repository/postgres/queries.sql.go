@@ -47,7 +47,7 @@ func (q *Queries) GetAnalyticsDonut(ctx context.Context, userID int64) ([]GetAna
 }
 
 const getBudgetsByUserId = `-- name: GetBudgetsByUserId :one
-SELECT user_id, daily_limit, weekly_limit, monthly_limit
+SELECT user_id, weekly_limit, monthly_limit
 FROM budgets
 WHERE user_id = $1
 `
@@ -57,7 +57,6 @@ func (q *Queries) GetBudgetsByUserId(ctx context.Context, userID int64) (Budget,
 	var i Budget
 	err := row.Scan(
 		&i.UserID,
-		&i.DailyLimit,
 		&i.WeeklyLimit,
 		&i.MonthlyLimit,
 	)
@@ -209,17 +208,15 @@ func (q *Queries) UpdateUserCurrency(ctx context.Context, arg UpdateUserCurrency
 }
 
 const upsertBudget = `-- name: UpsertBudget :exec
-INSERT INTO budgets (user_id, daily_limit, weekly_limit, monthly_limit)
-VALUES ($1, $2, $3, $4)
+INSERT INTO budgets (user_id, weekly_limit, monthly_limit)
+VALUES ($1, $2, $3)
 ON CONFLICT (user_id) DO UPDATE
-SET daily_limit   = EXCLUDED.daily_limit,
-    weekly_limit  = EXCLUDED.weekly_limit,
+SET weekly_limit  = EXCLUDED.weekly_limit,
     monthly_limit = EXCLUDED.monthly_limit
 `
 
 type UpsertBudgetParams struct {
 	UserID       int64          `json:"user_id"`
-	DailyLimit   pgtype.Numeric `json:"daily_limit"`
 	WeeklyLimit  pgtype.Numeric `json:"weekly_limit"`
 	MonthlyLimit pgtype.Numeric `json:"monthly_limit"`
 }
@@ -227,7 +224,6 @@ type UpsertBudgetParams struct {
 func (q *Queries) UpsertBudget(ctx context.Context, arg UpsertBudgetParams) error {
 	_, err := q.db.Exec(ctx, upsertBudget,
 		arg.UserID,
-		arg.DailyLimit,
 		arg.WeeklyLimit,
 		arg.MonthlyLimit,
 	)

@@ -275,18 +275,45 @@ button {
 }
 
 /* ═══════════════════════════════════════════════════
-   Виджет дневного бюджета
+   Виджет бюджета (переключатель Неделя / Месяц)
 ═══════════════════════════════════════════════════ */
 
 .budget-widget {
   text-align: center;
-  padding: 24px 16px 16px;
+  padding: 20px 16px 12px;
+}
+
+.budget-period-toggle {
+  display: inline-flex;
+  background: var(--secondary-bg-color);
+  border-radius: 20px;
+  padding: 3px;
+  margin-bottom: 10px;
+  gap: 2px;
+}
+
+.budget-period-option {
+  padding: 4px 16px;
+  border-radius: 18px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hint-color);
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.budget-period-option.active {
+  background: var(--bg-color);
+  color: var(--text-color);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
 .budget-label {
   font-size: 13px;
   color: var(--hint-color);
-  margin-bottom: 6px;
+  margin-top: 6px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -296,9 +323,7 @@ button {
   font-weight: 700;
   color: var(--success-color);
   line-height: 1;
-  /* Плавная смена цвета при приближении к 0 */
-  transition: color 0.4s ease;
-  /* Предотвращаем скачок при смене цвета */
+  transition: color 0.25s ease;
   will-change: color;
 }
 

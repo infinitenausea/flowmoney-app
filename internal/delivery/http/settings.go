@@ -10,7 +10,6 @@ import (
 
 type settingsRequest struct {
 	Currency     string  `json:"currency"`
-	DailyLimit   float64 `json:"daily_limit"`
 	WeeklyLimit  float64 `json:"weekly_limit"`
 	MonthlyLimit float64 `json:"monthly_limit"`
 }
@@ -51,7 +50,6 @@ func NewSettingsHandler(q repository.Querier) http.HandlerFunc {
 
 		if err := q.UpsertBudget(r.Context(), repository.UpsertBudgetParams{
 			UserID:       tgID,
-			DailyLimit:   float64ToNumeric(req.DailyLimit),
 			WeeklyLimit:  float64ToNumeric(req.WeeklyLimit),
 			MonthlyLimit: float64ToNumeric(req.MonthlyLimit),
 		}); err != nil {
