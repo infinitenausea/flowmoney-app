@@ -1,7 +1,6 @@
 # FlowMoney — System Architecture Specification
 
-> **Single Source of Truth.** Full static-analysis audit of all live source files, 2026-07-01.  
-> Supersedes all prior versions of this document and scattered notes in `spec.md` / `system_state.md`.
+> **Single Source of Truth.** Full static-analysis audit of all live source files, 2026-07-01.
 
 ---
 
