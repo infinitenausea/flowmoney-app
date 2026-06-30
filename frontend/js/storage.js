@@ -277,17 +277,20 @@ const StorageManager = (() => {
    * @param {Object[]} serverCats — категории из API
    * @returns {Object[]} актуальный список пользовательских категорий
    */
-  function mergeCategoriesFromServer(serverCats) {
+  function mergeCategoriesFromServer(serverCats, isBootstrap) {
     if (!serverCats || serverCats.length === 0) return getUserCategories();
 
     const localMap = new Map(_userCategories.map(c => [String(c.id), c]));
     let changed = false;
 
-    // Evict categories that were confirmed synced but are absent from the authoritative
-    // server list — they were hard-deleted on the server and must not be pushed back.
+    // During bootstrap the server list is absolute truth — evict every local category
+    // that is absent from serverCats regardless of its synced state, so zombie categories
+    // created on another client cannot be re-uploaded and revived.
+    // Outside bootstrap we only evict confirmed-synced entries (synced === true) because
+    // an unsynced local entry may legitimately be in-flight to the server.
     const serverIds = new Set(serverCats.map(c => String(c.id)));
     for (const [id, local] of localMap) {
-      if (local.synced === true && !serverIds.has(id)) {
+      if (!serverIds.has(id) && (isBootstrap || local.synced === true)) {
         localMap.delete(id);
         changed = true;
       }

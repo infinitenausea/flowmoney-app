@@ -1222,7 +1222,7 @@ async function bootstrap() {
       weeklyLimit: budget.weekly_limit || 0,
       monthlyLimit: budget.monthly_limit || 0,
       // Merge server categories into local storage, deduped strictly by UUID
-      categories: StorageManager.mergeCategoriesFromServer(data.categories || []),
+      categories: StorageManager.mergeCategoriesFromServer(data.categories || [], true),
       rates: data.rates || {},
     });
 
