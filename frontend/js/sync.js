@@ -17,7 +17,8 @@ const SyncRunner = (() => {
    */
   async function _push(initData) {
     const pending = StorageManager.getUnsyncedTransactions();
-    if (pending.length === 0) return;
+    const pendingCats = StorageManager.getUnsyncedCategories();
+    if (pending.length === 0 && pendingCats.length === 0) return;
 
     const res = await fetch('/api/v1/sync', {
       method:  'POST',
@@ -25,13 +26,19 @@ const SyncRunner = (() => {
         'Content-Type':  'application/json',
         'Authorization': `Telegram ${initData}`,
       },
-      body: JSON.stringify({ transactions: pending }),
+      body: JSON.stringify({ transactions: pending, categories: pendingCats }),
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    StorageManager.markAsSynced(pending.map(tx => tx.id));
-    console.info('[Sync] Pushed', pending.length, 'transaction(s)');
+    if (pending.length) {
+      StorageManager.markAsSynced(pending.map(tx => tx.id));
+      console.info('[Sync] Pushed', pending.length, 'transaction(s)');
+    }
+    if (pendingCats.length) {
+      StorageManager.markCategoriesAsSynced(pendingCats.map(c => c.id));
+      console.info('[Sync] Pushed', pendingCats.length, 'category(ies)');
+    }
   }
 
   /**

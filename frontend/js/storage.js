@@ -238,13 +238,42 @@ const StorageManager = (() => {
    * @param {{ id: string, name: string, icon: string, color: string, is_system: boolean, sort_order: number }} cat
    */
   function saveUserCategory(cat) {
-    _userCategories.push(cat);
+    const entry = { ...cat, synced: false };
+    _userCategories.push(entry);
     try {
       localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
     } catch (e) {
       console.warn('[Storage] Failed to persist user categories:', e.message);
     }
-    Store.state.categories = [...(Store.state.categories || []), cat];
+    Store.state.categories = [...(Store.state.categories || []), entry];
+  }
+
+  /**
+   * Возвращает категории, ещё не отправленные на сервер.
+   * @returns {Object[]}
+   */
+  function getUnsyncedCategories() {
+    return _userCategories.filter(c => !c.synced);
+  }
+
+  /**
+   * Помечает указанные категории как синхронизированные и сохраняет в localStorage.
+   * @param {string[]} ids
+   */
+  function markCategoriesAsSynced(ids) {
+    const idSet = new Set(ids);
+    let changed = false;
+    _userCategories = _userCategories.map(c => {
+      if (idSet.has(c.id)) { changed = true; return { ...c, synced: true }; }
+      return c;
+    });
+    if (changed) {
+      try {
+        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
+      } catch (e) {
+        console.warn('[Storage] Failed to persist user categories:', e.message);
+      }
+    }
   }
 
   /**
@@ -262,7 +291,7 @@ const StorageManager = (() => {
     return JSON.parse(JSON.stringify(_transactions));
   }
 
-  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, getUserCategories, _dump };
+  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, getUserCategories, getUnsyncedCategories, markCategoriesAsSynced, _dump };
 })();
 
 window.StorageManager = StorageManager;
