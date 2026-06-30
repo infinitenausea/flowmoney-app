@@ -44,6 +44,13 @@ func main() {
 	}
 	log.Println("database connection established")
 
+	// ONE-SHOT CLEANUP: remove legacy system/shared categories; revert after deploy
+	if _, err := pool.Exec(dbCtx, `DELETE FROM categories WHERE user_id = 0 OR is_system = true`); err != nil {
+		log.Printf("startup cleanup warning: %v", err)
+	} else {
+		log.Println("startup cleanup: stale system categories removed")
+	}
+
 	queries := repository.New(pool)
 
 	rm := service.NewRatesManager()
