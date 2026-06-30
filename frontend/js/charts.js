@@ -9,11 +9,11 @@
 
 const DonutChart = (() => {
   // SVG geometry
-  const R    = 35;              // ring radius
+  const R    = 36;              // ring radius
   const CX   = 50;
   const CY   = 50;
-  const SW   = 18;              // stroke-width = ring thickness
-  const CIRC = 2 * Math.PI * R; // ≈ 219.91
+  const SW   = 10;              // stroke-width = ring thickness (thinner → wider inner hole for text)
+  const CIRC = 2 * Math.PI * R; // ≈ 226.19
 
   let _selectedCatId  = null;
   let _lastData       = [];
@@ -48,7 +48,7 @@ const DonutChart = (() => {
           <svg class="donut-svg" viewBox="0 0 100 100" width="100%" height="100%"
                role="img" aria-label="Нет расходов за этот месяц">
             <circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
-              stroke="var(--hint-color)" stroke-width="${SW}" opacity="0.35"/>
+              stroke="var(--hint-color)" stroke-width="${SW}" opacity="0.35" />
             <text x="${CX}" y="${CY - 5}" text-anchor="middle" font-size="5.5"
               fill="var(--hint-color)" font-family="-apple-system,BlinkMacSystemFont,sans-serif">Месяц</text>
             <text x="${CX}" y="${CY + 9}" text-anchor="middle" font-size="9.5" font-weight="700"
@@ -109,8 +109,11 @@ const DonutChart = (() => {
 
     // Set center text via textContent — safe for user-supplied names and numbers
     const svgTexts = container.querySelectorAll('.donut-svg text');
+    const sym = typeof getCurrencySymbol === 'function'
+      ? getCurrencySymbol(_cur)
+      : (_cur || '₽');
     svgTexts[0].textContent = centerLabel;
-    svgTexts[1].textContent = _fmtShort(centerAmt);
+    svgTexts[1].textContent = centerAmt.toFixed(2) + ' ' + sym;
 
     // Build legend via DOM — amounts set exclusively via textContent
     const legendEl = container.querySelector('.donut-legend');
@@ -168,12 +171,6 @@ const DonutChart = (() => {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }) + ' ' + sym;
-  }
-
-  function _fmtShort(n) {
-    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-    if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
-    return Math.round(n).toString();
   }
 
   /* ── Timeline ─────────────────────────────────────────────────────────── */

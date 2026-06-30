@@ -491,8 +491,8 @@ button {
 }
 
 .donut-svg {
-  width: 200px;
-  height: 200px;
+  width: min(260px, calc(100vw - 48px));
+  height: min(260px, calc(100vw - 48px));
   flex-shrink: 0;
   /* Hardware-accelerated layer for smooth segment transitions */
   will-change: transform;
