@@ -417,64 +417,46 @@ function handleAddTransaction() {
    8. Аналитика — загрузка и рендер
 ═══════════════════════════════════════════════════ */
 
-async function loadAnalyticsData() {
-  const cats   = Store.state.categories;
+function computeLocalDonutData() {
+  const transactions = Store.state.transactions || [];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const currentMonthTxs = transactions.filter(tx => {
+    if (tx.is_deleted) return false;
+    const txDate = new Date(tx.created_at);
+    return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+  });
+
+  const groups = {};
+  currentMonthTxs.forEach(tx => {
+    const amt = parseFloat(tx.amount) || 0;
+    groups[tx.category_id] = (groups[tx.category_id] || 0) + amt;
+  });
+
+  return Object.keys(groups).map(catId => ({
+    category_id: catId,
+    total: Number(groups[catId].toFixed(2)),
+  }));
+}
+
+function loadAnalyticsData() {
+  const cats = Store.state.categories;
   const catMap = {};
   cats.forEach(c => { catMap[c.id] = c; });
 
-  // Try to load server-aggregated donut (accurate monthly totals)
-  if (Store.state.isOnline) {
-    try {
-      const initData = tg?.initData || '';
-      const res = await fetch('/api/v1/analytics/donut', {
-        headers: { 'Authorization': `Telegram ${initData}` },
-      });
-      if (res.ok) {
-        const raw = await res.json();
-        const enriched = (raw || []).map(item => ({
-          ...item,
-          name:  catMap[item.category_id]?.name  || item.category_id,
-          color: catMap[item.category_id]?.color || '#888888',
-          icon:  catMap[item.category_id]?.icon  || '💰',
-        }));
-        Store.state.analyticsDonut = enriched;
-        DonutChart.renderDonutChart('donut-container', enriched);
-        renderTimelineFromStore();
-        return;
-      }
-    } catch (e) {
-      console.warn('[Analytics] donut fetch failed, falling back to local:', e.message);
-    }
-  }
-
-  // Offline fallback: aggregate from local transactions
-  _renderLocalDonut(catMap);
-  renderTimelineFromStore();
-}
-
-function _renderLocalDonut(catMapArg) {
-  const cats   = Store.state.categories;
-  const catMap = catMapArg || {};
-  if (!catMapArg) cats.forEach(c => { catMap[c.id] = c; });
-
-  const now   = new Date();
-  const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const totals = {};
-
-  (Store.state.transactions || [])
-    .filter(tx => !tx.is_deleted && new Date(tx.created_at) >= mStart)
-    .forEach(tx => { totals[tx.category_id] = (totals[tx.category_id] || 0) + Number(tx.amount); });
-
-  const data = Object.entries(totals).map(([catId, total]) => ({
-    category_id: catId,
-    total,
-    name:  catMap[catId]?.name  || catId,
-    color: catMap[catId]?.color || '#888888',
-    icon:  catMap[catId]?.icon  || '💰',
+  const localDonut = computeLocalDonutData();
+  const enriched = localDonut.map(item => ({
+    ...item,
+    name:  catMap[item.category_id]?.name  || item.category_id,
+    color: catMap[item.category_id]?.color || '#888888',
+    icon:  catMap[item.category_id]?.icon  || '💰',
   }));
 
-  Store.state.analyticsDonut = data;
-  DonutChart.renderDonutChart('donut-container', data);
+  Store.state.analyticsDonut = enriched;
+  DonutChart.renderDonutChart('donut-container', enriched);
+  renderTimelineFromStore();
 }
 
 function renderTimelineFromStore() {
@@ -501,9 +483,9 @@ function initAnalytics() {
     if (Store.state.currentTab === 'analytics') renderTimelineFromStore();
   });
 
-  // Refresh timeline when local transactions change (add / delete / sync)
+  // Refresh donut + timeline when local transactions change (add / delete / sync)
   Store.subscribe('transactions', () => {
-    if (Store.state.currentTab === 'analytics') renderTimelineFromStore();
+    if (Store.state.currentTab === 'analytics') loadAnalyticsData();
   });
 
   // Wire up swipe gestures once on the persistent container
