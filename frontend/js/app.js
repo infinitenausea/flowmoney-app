@@ -431,8 +431,16 @@ function computeLocalDonutData() {
 
   const groups = {};
   currentMonthTxs.forEach(tx => {
-    const amt = parseFloat(tx.amount) || 0;
-    groups[tx.category_id] = (groups[tx.category_id] || 0) + amt;
+    const txCurrency = tx.currency || Store.state.currency;
+    let amountInAppCurrency = parseFloat(tx.amount) || 0;
+
+    if (txCurrency !== Store.state.currency && Store.state.rates[txCurrency] && Store.state.rates[Store.state.currency]) {
+      amountInAppCurrency = (amountInAppCurrency / Store.state.rates[txCurrency]) * Store.state.rates[Store.state.currency];
+    }
+
+    console.log("DONUT DEBUG:", tx.amount, txCurrency, "->", amountInAppCurrency, Store.state.currency);
+
+    groups[tx.category_id] = (groups[tx.category_id] || 0) + amountInAppCurrency;
   });
 
   return Object.keys(groups).map(catId => ({

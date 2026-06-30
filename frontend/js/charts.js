@@ -38,17 +38,9 @@ const DonutChart = (() => {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    // Convert each item's total from its source currency to the current display currency.
-    // items coming from the backend carry no currency field, so we treat them as RUB (server base).
-    const _cur   = Store.state.currency || 'RUB';
-    const _rates = Store.state.rates || {};
-    function _convertTotal(item) {
-      const src = item.currency || 'RUB';
-      if (src === _cur || !_rates[src] || !_rates[_cur]) return item.total || 0;
-      return ((item.total || 0) / _rates[src]) * _rates[_cur];
-    }
-
-    const total = _lastData.reduce((s, d) => s + _convertTotal(d), 0);
+    // Totals are already in the current app currency — computed by computeLocalDonutData().
+    const _cur  = Store.state.currency || 'RUB';
+    const total = _lastData.reduce((s, d) => s + (d.total || 0), 0);
 
     if (!_lastData.length || total === 0) {
       container.innerHTML = `
@@ -67,23 +59,17 @@ const DonutChart = (() => {
       return;
     }
 
-    let segsHTML   = '';
-    let legendHTML = '';
-    let offset     = 0;
+    let segsHTML = '';
+    let offset   = 0;
 
     _lastData.forEach((item, i) => {
-      // Enrich with category data from Store — makes the chart self-sufficient
-      // regardless of whether the caller pre-enriched the data or not
       const category = (Store.state.categories || []).find(c => String(c.id) === String(item.category_id));
       const color    = category ? category.color : (item.color || `hsl(${(i * 53) % 360},65%,55%)`);
-      const name     = category ? category.name  : (item.name  || 'Разное');
-
-      const convertedTotal = _convertTotal(item);
-      const frac  = convertedTotal / total;
-      const len   = frac * CIRC;
-      const isSel = _selectedCatId === item.category_id;
-      const op    = _selectedCatId && !isSel ? 0.28 : 1;
-      const sw    = isSel ? SW + 5 : SW;
+      const frac     = (item.total || 0) / total;
+      const len      = frac * CIRC;
+      const isSel    = _selectedCatId === item.category_id;
+      const op       = _selectedCatId && !isSel ? 0.28 : 1;
+      const sw       = isSel ? SW + 5 : SW;
 
       segsHTML += `<circle class="donut-segment" data-cat-id="${_esc(item.category_id)}"
         cx="${CX}" cy="${CY}" r="${R}" fill="none"
@@ -93,27 +79,20 @@ const DonutChart = (() => {
         transform="rotate(-90 ${CX} ${CY})"
         style="opacity:${op};transition:stroke-width .2s ease,opacity .2s ease;cursor:pointer"/>`;
 
-      legendHTML += `
-        <div class="donut-legend-item" data-cat-id="${_esc(item.category_id)}"
-             style="opacity:${op};transition:opacity .2s ease;cursor:pointer">
-          <span class="donut-legend-dot" style="background:${_esc(color)}"></span>
-          <span class="donut-legend-name">${_esc(name)}</span>
-          <span class="donut-legend-amt">${_esc(_fmtLegendAmt(convertedTotal, _cur))}</span>
-        </div>`;
-
       offset += len;
     });
 
-    // Center label: use enriched name from Store for the focused segment
-    const focused = _selectedCatId ? _lastData.find(d => d.category_id === _selectedCatId) : null;
+    // Center label + amount
+    const focused    = _selectedCatId ? _lastData.find(d => d.category_id === _selectedCatId) : null;
     const focusedCat = focused
-      ? (Store.state.categories || []).find(c => c.id === focused.category_id)
+      ? (Store.state.categories || []).find(c => String(c.id) === String(focused.category_id))
       : null;
     const centerLabel = focusedCat
       ? focusedCat.name.slice(0, 12)
       : (focused ? (focused.name || '').slice(0, 12) : 'Месяц');
-    const centerAmt   = focused ? _convertTotal(focused) : total;
+    const centerAmt   = focused ? (focused.total || 0) : total;
 
+    // Build structure — SVG segments via innerHTML, text nodes via textContent below
     container.innerHTML = `
       <div class="donut-chart-wrap">
         <svg class="donut-svg" viewBox="0 0 100 100" width="100%" height="100%" role="img" aria-label="Расходы по категориям">
@@ -121,12 +100,49 @@ const DonutChart = (() => {
             stroke="var(--secondary-bg-color)" stroke-width="${SW}"/>
           ${segsHTML}
           <text x="${CX}" y="${CY - 5}" text-anchor="middle" font-size="5.5"
-            fill="var(--hint-color)" font-family="-apple-system,BlinkMacSystemFont,sans-serif">${_esc(centerLabel)}</text>
+            fill="var(--hint-color)" font-family="-apple-system,BlinkMacSystemFont,sans-serif"></text>
           <text x="${CX}" y="${CY + 9}" text-anchor="middle" font-size="9.5" font-weight="700"
-            fill="var(--text-color)" font-family="-apple-system,BlinkMacSystemFont,sans-serif">${_fmtShort(centerAmt)}</text>
+            fill="var(--text-color)" font-family="-apple-system,BlinkMacSystemFont,sans-serif"></text>
         </svg>
-        <div class="donut-legend">${legendHTML}</div>
+        <div class="donut-legend"></div>
       </div>`;
+
+    // Set center text via textContent — safe for user-supplied names and numbers
+    const svgTexts = container.querySelectorAll('.donut-svg text');
+    svgTexts[0].textContent = centerLabel;
+    svgTexts[1].textContent = _fmtShort(centerAmt);
+
+    // Build legend via DOM — amounts set exclusively via textContent
+    const legendEl = container.querySelector('.donut-legend');
+    _lastData.forEach((item, i) => {
+      const category = (Store.state.categories || []).find(c => String(c.id) === String(item.category_id));
+      const color    = category ? category.color : (item.color || `hsl(${(i * 53) % 360},65%,55%)`);
+      const name     = category ? category.name  : (item.name  || 'Разное');
+      const isSel    = _selectedCatId === item.category_id;
+      const op       = _selectedCatId && !isSel ? 0.28 : 1;
+
+      const itemEl = document.createElement('div');
+      itemEl.className = 'donut-legend-item';
+      itemEl.dataset.catId = item.category_id;
+      itemEl.style.cssText = `opacity:${op};transition:opacity .2s ease;cursor:pointer`;
+
+      const dotEl = document.createElement('span');
+      dotEl.className = 'donut-legend-dot';
+      dotEl.style.background = color;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'donut-legend-name';
+      nameEl.textContent = name;
+
+      const amtEl = document.createElement('span');
+      amtEl.className = 'donut-legend-amt';
+      amtEl.textContent = _fmtLegendAmt(item.total, _cur);
+
+      itemEl.appendChild(dotEl);
+      itemEl.appendChild(nameEl);
+      itemEl.appendChild(amtEl);
+      legendEl.appendChild(itemEl);
+    });
 
     // Attach tap listener once per container (WeakSet prevents duplicates)
     if (!_listeners.has(container)) {
