@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -102,6 +103,6 @@ func stringToUUID(s string) (pgtype.UUID, error) {
 
 func float64ToNumeric(f float64) pgtype.Numeric {
 	var n pgtype.Numeric
-	_ = n.Scan(f)
+	_ = n.Scan(strconv.FormatFloat(f, 'f', -1, 64))
 	return n
 }
