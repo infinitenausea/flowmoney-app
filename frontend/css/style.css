@@ -1537,6 +1537,8 @@ input[type="range"]::-moz-range-thumb {
   grid-template-columns: repeat(6, 1fr);
   gap: 8px;
   padding: 0 16px 16px;
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 .cat-emoji-option {
@@ -1571,6 +1573,8 @@ input[type="range"]::-moz-range-thumb {
   gap: 12px;
   padding: 0 16px 20px;
   flex-wrap: wrap;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .cat-color-swatch {
