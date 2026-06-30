@@ -512,28 +512,123 @@ button {
   margin-bottom: 12px;
 }
 
-.date-input {
-  flex: 1;
-  padding: 8px 10px;
-  background: var(--secondary-bg-color, #f0f0f0);
-  color: var(--text-color, #222);
-  border: 1.5px solid color-mix(in srgb, var(--hint-color, #aaa) 50%, transparent);
-  border-radius: 10px;
-  font-size: 14px;
-  font-family: inherit;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
+.date-trigger {
+  flex: 1 1 0;
   min-width: 0;
-}
-
-.date-input:focus {
-  border-color: var(--accent-color, #3390ec);
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .date-range-sep {
   color: var(--hint-color, #999);
   flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════
+   Кастомный календарь (CalendarSheet)
+═══════════════════════════════════════════════════ */
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px 12px;
+}
+
+.calendar-month-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color);
+  text-transform: capitalize;
+}
+
+.calendar-nav-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--secondary-bg-color);
+  color: var(--text-color);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.calendar-nav-btn:active {
+  transform: scale(0.88);
+  opacity: 0.65;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 0 12px 4px;
+  gap: 2px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--hint-color);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 0 12px 8px;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-color);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.calendar-day:not(.empty):active {
+  transform: scale(0.85);
+}
+
+.calendar-day.empty {
+  pointer-events: none;
+}
+
+.calendar-day.today {
+  color: var(--accent-color);
+  font-weight: 700;
+}
+
+.calendar-day.in-range {
+  background: color-mix(in srgb, var(--accent-color) 15%, transparent);
+  border-radius: 0;
+}
+
+.calendar-day.range-start,
+.calendar-day.range-end {
+  background: var(--accent-color);
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--radius-full);
 }
 
 .donut-container {

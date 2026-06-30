@@ -96,9 +96,13 @@
           <button class="period-btn" data-period="custom" aria-pressed="false">Период</button>
         </div>
         <div id="custom-date-picker" class="custom-date-picker" aria-hidden="true">
-          <input type="date" id="analytics-start-date" class="date-input" aria-label="Начало периода">
+          <div id="calendar-start-trigger" class="date-trigger custom-select compact-select" role="button" aria-label="Начало периода">
+            <span id="calendar-start-label">01.06.2026</span>
+          </div>
           <span class="date-range-sep">—</span>
-          <input type="date" id="analytics-end-date" class="date-input" aria-label="Конец периода">
+          <div id="calendar-end-trigger" class="date-trigger custom-select compact-select" role="button" aria-label="Конец периода">
+            <span id="calendar-end-label">30.06.2026</span>
+          </div>
         </div>
         <div id="donut-container" class="donut-container">
           <canvas id="donut-canvas" aria-label="Расходы по категориям"></canvas>
@@ -325,6 +329,23 @@
           <span class="cso-code">EUR</span>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       Шторка: кастомный календарь
+  ═══════════════════════════════════════ -->
+  <div id="calendar-sheet" class="bottom-sheet" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Выбор даты">
+    <div class="bottom-sheet-backdrop"></div>
+    <div class="bottom-sheet-panel">
+      <div class="bottom-sheet-handle"></div>
+      <div class="calendar-header">
+        <button class="calendar-nav-btn" id="calendar-prev" aria-label="Предыдущий месяц">‹</button>
+        <span id="calendar-month-label" class="calendar-month-label"></span>
+        <button class="calendar-nav-btn" id="calendar-next" aria-label="Следующий месяц">›</button>
+      </div>
+      <div class="calendar-weekdays"></div>
+      <div id="calendar-grid" class="calendar-grid"></div>
     </div>
   </div>
 

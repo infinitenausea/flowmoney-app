@@ -496,33 +496,197 @@ function renderTimelineFromStore() {
   DonutChart.renderTimeline('timeline', txs, Store.state.categories);
 }
 
+/* ═══════════════════════════════════════════════════
+   8б. CalendarSheet — кастомная шторка-календарь
+═══════════════════════════════════════════════════ */
+
+const CalendarSheet = (() => {
+  const MONTHS_RU   = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                        'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const WEEKDAYS_RU = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+  let currentTarget = null;  // 'start' | 'end'
+  let viewYear  = 0;
+  let viewMonth = 0;
+
+  const sheet      = document.getElementById('calendar-sheet');
+  const grid       = document.getElementById('calendar-grid');
+  const monthLabel = document.getElementById('calendar-month-label');
+  const startLabel = document.getElementById('calendar-start-label');
+  const endLabel   = document.getElementById('calendar-end-label');
+
+  function fmtLabel(ts) {
+    const d = new Date(ts);
+    return String(d.getDate()).padStart(2, '0') + '.' +
+           String(d.getMonth() + 1).padStart(2, '0') + '.' +
+           d.getFullYear();
+  }
+
+  function syncLabels() {
+    const range = Store.state.analyticsRange;
+    if (!range) return;
+    if (startLabel && range.start) startLabel.textContent = fmtLabel(range.start);
+    if (endLabel   && range.end)   endLabel.textContent   = fmtLabel(range.end);
+  }
+
+  function open(target) {
+    currentTarget = target;
+    const range = Store.state.analyticsRange || {};
+    const refTs = target === 'start' ? range.start : range.end;
+    const ref   = refTs ? new Date(refTs) : new Date();
+    viewYear  = ref.getFullYear();
+    viewMonth = ref.getMonth();
+    renderGrid();
+    sheet.classList.add('active');
+    sheet.removeAttribute('aria-hidden');
+  }
+
+  function close() {
+    sheet.classList.remove('active');
+    sheet.setAttribute('aria-hidden', 'true');
+  }
+
+  function renderGrid() {
+    monthLabel.textContent = MONTHS_RU[viewMonth] + ' ' + viewYear;
+    grid.textContent = '';
+
+    const today     = new Date();
+    const todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const range     = Store.state.analyticsRange || {};
+
+    function normDay(ts) {
+      const d = new Date(ts);
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    }
+    const rsNorm = range.start ? normDay(range.start) : null;
+    const reNorm = range.end   ? normDay(range.end)   : null;
+
+    const firstDow   = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
+    const startOffset = (firstDow + 6) % 7;                       // Mon=0
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+    const fragment = document.createDocumentFragment();
+
+    for (let i = 0; i < startOffset; i++) {
+      const empty = document.createElement('div');
+      empty.className = 'calendar-day empty';
+      fragment.appendChild(empty);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const btn     = document.createElement('div');
+      btn.className = 'calendar-day';
+      btn.dataset.day = day;
+      btn.appendChild(document.createTextNode(String(day)));
+
+      const dayNorm = new Date(viewYear, viewMonth, day).getTime();
+
+      if (dayNorm === todayNorm) btn.classList.add('today');
+
+      if (rsNorm !== null && reNorm !== null) {
+        if      (dayNorm === rsNorm)                          btn.classList.add('range-start');
+        else if (dayNorm === reNorm)                          btn.classList.add('range-end');
+        else if (dayNorm > rsNorm && dayNorm < reNorm)        btn.classList.add('in-range');
+      } else if (rsNorm !== null && dayNorm === rsNorm) {
+        btn.classList.add('range-start');
+      } else if (reNorm !== null && dayNorm === reNorm) {
+        btn.classList.add('range-end');
+      }
+
+      fragment.appendChild(btn);
+    }
+
+    grid.appendChild(fragment);
+  }
+
+  function handleDayTap(day) {
+    const dayStart  = new Date(viewYear, viewMonth, day).getTime();
+    const dayEnd    = new Date(viewYear, viewMonth, day, 23, 59, 59, 999).getTime();
+    const labelText = String(day).padStart(2, '0') + '.' +
+                      String(viewMonth + 1).padStart(2, '0') + '.' + viewYear;
+    const prev = Store.state.analyticsRange || {};
+    let newStart = prev.start ?? dayStart;
+    let newEnd   = prev.end   ?? dayEnd;
+
+    if (currentTarget === 'start') {
+      newStart = dayStart;
+      if (startLabel) startLabel.textContent = labelText;
+      if (newStart > newEnd) {
+        newEnd = dayEnd;
+        if (endLabel) endLabel.textContent = labelText;
+      }
+    } else {
+      newEnd = dayEnd;
+      if (endLabel) endLabel.textContent = labelText;
+      if (newEnd < newStart) {
+        newStart = dayStart;
+        if (startLabel) startLabel.textContent = labelText;
+      }
+    }
+
+    Store.state.analyticsRange  = { start: newStart, end: newEnd };
+    Store.state.analyticsPeriod = 'custom';
+    if (Store.state.currentTab === 'analytics') loadAnalyticsData();
+    close();
+  }
+
+  function init() {
+    if (!sheet) return;
+
+    // Render static weekday headers once
+    const weekdaysEl = sheet.querySelector('.calendar-weekdays');
+    if (weekdaysEl) {
+      WEEKDAYS_RU.forEach(name => {
+        const el = document.createElement('div');
+        el.className = 'calendar-weekday';
+        el.textContent = name;
+        weekdaysEl.appendChild(el);
+      });
+    }
+
+    // Backdrop closes sheet
+    const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
+    if (backdrop) backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); close(); });
+
+    // Month navigation
+    const prevBtn = document.getElementById('calendar-prev');
+    const nextBtn = document.getElementById('calendar-next');
+    if (prevBtn) prevBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      tg?.HapticFeedback?.impactOccurred('light');
+      if (--viewMonth < 0) { viewMonth = 11; viewYear--; }
+      renderGrid();
+    });
+    if (nextBtn) nextBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      tg?.HapticFeedback?.impactOccurred('light');
+      if (++viewMonth > 11) { viewMonth = 0; viewYear++; }
+      renderGrid();
+    });
+
+    // Day taps — delegated
+    if (grid) grid.addEventListener('pointerdown', (e) => {
+      const day = e.target.closest('.calendar-day:not(.empty)');
+      if (!day) return;
+      e.preventDefault();
+      tg?.HapticFeedback?.impactOccurred('light');
+      handleDayTap(parseInt(day.dataset.day, 10));
+    });
+
+    // Trigger buttons
+    const startTrigger = document.getElementById('calendar-start-trigger');
+    const endTrigger   = document.getElementById('calendar-end-trigger');
+    if (startTrigger) startTrigger.addEventListener('pointerdown', (e) => { e.preventDefault(); open('start'); });
+    if (endTrigger)   endTrigger.addEventListener('pointerdown',   (e) => { e.preventDefault(); open('end'); });
+  }
+
+  return { init, open, close, syncLabels };
+})();
+
 function initPeriodSwitcher() {
   const switcher   = document.querySelector('.analytics-period-switcher');
   const datePicker = document.getElementById('custom-date-picker');
-  const startInput = document.getElementById('analytics-start-date');
-  const endInput   = document.getElementById('analytics-end-date');
   if (!switcher) return;
-
-  function toYMD(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
-  function applyCustomRange() {
-    if (!startInput.value || !endInput.value) return;
-    const startDate = new Date(startInput.value);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(endInput.value);
-    endDate.setHours(23, 59, 59, 999);
-    Store.state.analyticsPeriod  = 'custom';
-    Store.state.analyticsRange   = { start: startDate.getTime(), end: endDate.getTime() };
-    if (Store.state.currentTab === 'analytics') loadAnalyticsData();
-  }
-
-  if (startInput) startInput.addEventListener('change', applyCustomRange);
-  if (endInput)   endInput.addEventListener('change', applyCustomRange);
 
   switcher.addEventListener('pointerdown', (e) => {
     const btn = e.target.closest('[data-period]');
@@ -540,12 +704,17 @@ function initPeriodSwitcher() {
     });
 
     if (period === 'custom') {
-      const now   = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      if (startInput && !startInput.value) startInput.value = toYMD(start);
-      if (endInput   && !endInput.value)   endInput.value   = toYMD(now);
+      const now = new Date();
+      if (!Store.state.analyticsRange?.start) {
+        Store.state.analyticsRange = {
+          start: new Date(now.getFullYear(), now.getMonth(), 1).getTime(),
+          end:   new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime(),
+        };
+      }
+      CalendarSheet.syncLabels();
       if (datePicker) { datePicker.style.display = 'flex'; datePicker.removeAttribute('aria-hidden'); }
-      applyCustomRange();
+      Store.state.analyticsPeriod = 'custom';
+      if (Store.state.currentTab === 'analytics') loadAnalyticsData();
     } else {
       if (datePicker) { datePicker.style.display = 'none'; datePicker.setAttribute('aria-hidden', 'true'); }
       Store.state.analyticsPeriod = period;
@@ -578,6 +747,7 @@ function initAnalytics() {
   });
 
   initPeriodSwitcher();
+  CalendarSheet.init();
 
   // Wire up swipe gestures once on the persistent container
   const timelineEl = document.getElementById('timeline');
@@ -724,4 +894,4 @@ if (document.readyState === 'loading') {
 }
 
 // Глобальный экспорт для отладки в консоли
-window.App = { Store, Router, StorageManager, SyncRunner, DonutChart, SwipeGesture, Settings, formatCurrency, getCurrencySymbol };
+window.App = { Store, Router, StorageManager, SyncRunner, DonutChart, SwipeGesture, Settings, CalendarSheet, formatCurrency, getCurrencySymbol };
