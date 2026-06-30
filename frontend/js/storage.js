@@ -332,6 +332,12 @@ const StorageManager = (() => {
       } catch (e) {
         console.warn('[Storage] Failed to persist merged categories:', e.message);
       }
+
+      if (isBootstrap) {
+        // Force-refresh internal cache on bootstrap to ensure atomic update of runtime state
+        const freshCats = getUserCategories();
+        Store.state.categories = freshCats;
+      }
     }
 
     const result = getUserCategories();

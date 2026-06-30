@@ -1215,14 +1215,6 @@ async function bootstrap() {
     if (!res.ok) throw new Error(`bootstrap: ${res.status}`);
 
     const data = await res.json();
-
-    // DEBUG: phantom categories probe — remove before release
-    (function() {
-      const serverCount = (data.categories || []).length;
-      const localCount = JSON.parse(localStorage.getItem('flowmoney_user_categories') || '[]').length;
-      document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;top:10px;left:10px;background:black;color:lime;z-index:99999;padding:10px;font-family:monospace;">SERVER: ${serverCount} | LOCAL: ${localCount}</div>`);
-    })();
-
     const budget = data.budget || {};
 
     // Merge server categories into local storage, deduped strictly by UUID
@@ -1236,8 +1228,17 @@ async function bootstrap() {
       rates: data.rates || {},
     });
 
-    // Explicitly render carousel with server data before skeleton disappears
-    CategoryCarousel.render(mergedCategories);
+    // Explicitly render carousel after Store update to ensure atomic UI refresh
+    if (window.CategoryCarousel && typeof window.CategoryCarousel.render === 'function') {
+      CategoryCarousel.render(mergedCategories);
+    }
+
+    // DEBUG: phantom categories probe — moved here to show post-merge state
+    (function() {
+      const serverCount = (data.categories || []).length;
+      const localCount = JSON.parse(localStorage.getItem('flowmoney_user_categories') || '[]').length;
+      document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;top:10px;left:10px;background:black;color:lime;z-index:99999;padding:10px;font-family:monospace;">SERVER: ${serverCount} | LOCAL: ${localCount}</div>`);
+    })();
 
   } catch (err) {
     // Offline-first: не блокируем UI, работаем с локальным состоянием
