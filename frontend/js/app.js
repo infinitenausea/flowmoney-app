@@ -508,9 +508,16 @@ function initAnalytics() {
     onDuplicate(txId) {
       const tx = (Store.state.transactions || []).find(t => t.id === txId);
       if (!tx) return;
+
+      const txCurrency = tx.currency || Store.state.currency;
+      let targetAmount = tx.amount;
+      if (txCurrency !== Store.state.currency && Store.state.rates[txCurrency]) {
+        targetAmount = (tx.amount / Store.state.rates[txCurrency]) * Store.state.rates[Store.state.currency];
+      }
+
       StorageManager.saveTransactionLocally({
         category_id: tx.category_id,
-        amount:      tx.amount,
+        amount:      Number(targetAmount.toFixed(2)),
         created_at:  new Date().toISOString(),
       });
       SyncRunner.syncWithBackend();
