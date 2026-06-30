@@ -1215,6 +1215,14 @@ async function bootstrap() {
     if (!res.ok) throw new Error(`bootstrap: ${res.status}`);
 
     const data = await res.json();
+
+    // DEBUG: phantom categories probe — remove before release
+    (function() {
+      const serverCount = (data.categories || []).length;
+      const localCount = JSON.parse(localStorage.getItem('flowmoney_user_categories') || '[]').length;
+      document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;top:10px;left:10px;background:black;color:lime;z-index:99999;padding:10px;font-family:monospace;">SERVER: ${serverCount} | LOCAL: ${localCount}</div>`);
+    })();
+
     const budget = data.budget || {};
 
     Store.batchUpdate({
