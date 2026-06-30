@@ -318,7 +318,31 @@ const DonutChart = (() => {
     Store.state.selectedAnalyticsCategory = null;
   }
 
-  return { renderDonutChart, renderTimeline, resetFilter };
+  // Updates only currency text nodes — no SVG redraw, no data recompute.
+  // Safe to call whenever the display currency changes.
+  function refreshCurrencyLabels(newCurrency) {
+    if (!_lastContId || !_lastData.length) return;
+    const container = document.getElementById(_lastContId);
+    if (!container) return;
+
+    const cur   = newCurrency || Store.state.currency || 'RUB';
+    const sym   = typeof getCurrencySymbol === 'function' ? getCurrencySymbol(cur) : cur;
+    const total = _lastData.reduce((s, d) => s + (d.total || 0), 0);
+
+    const svgTexts = container.querySelectorAll('.donut-svg text');
+    if (svgTexts[1]) {
+      const focused   = _selectedCatId ? _lastData.find(d => d.category_id === _selectedCatId) : null;
+      const centerAmt = focused ? (focused.total || 0) : total;
+      svgTexts[1].textContent = centerAmt.toFixed(2) + ' ' + sym;
+    }
+
+    const amtEls = container.querySelectorAll('.donut-legend-amt');
+    amtEls.forEach((el, i) => {
+      if (_lastData[i]) el.textContent = _fmtLegendAmt(_lastData[i].total, cur);
+    });
+  }
+
+  return { renderDonutChart, renderTimeline, resetFilter, refreshCurrencyLabels };
 })();
 
 window.DonutChart = DonutChart;
