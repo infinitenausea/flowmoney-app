@@ -147,13 +147,45 @@ const StorageManager = (() => {
   }
 
   /**
+   * Мержит транзакции с сервера в локальное хранилище без затирания данных.
+   * — Новые записи (нет в localStorage) добавляются.
+   * — Существующие не-pending записи обновляются до серверной версии.
+   * — Записи с _pending: true не трогаются (оптимистичный апдейт в полёте).
+   * @param {Object[]} items — транзакции из API
+   */
+  function mergeFromServer(items) {
+    if (!items || items.length === 0) return;
+
+    const localMap = new Map(_transactions.map(tx => [tx.id, tx]));
+    let changed = false;
+
+    items.forEach(serverTx => {
+      const local = localMap.get(serverTx.id);
+      if (!local) {
+        localMap.set(serverTx.id, { ...serverTx, synced: true, _pending: false });
+        changed = true;
+      } else if (!local._pending) {
+        localMap.set(serverTx.id, { ...serverTx, synced: true, _pending: false });
+        changed = true;
+      }
+      // local._pending === true: запись ждёт отправки — сервер не перезаписывает
+    });
+
+    if (changed) {
+      _transactions = Array.from(localMap.values());
+      _persist();
+      Store.state.transactions = [..._transactions];
+    }
+  }
+
+  /**
    * Возвращает снимок всех транзакций (только для отладки).
    */
   function _dump() {
     return JSON.parse(JSON.stringify(_transactions));
   }
 
-  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, _dump };
+  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, _dump };
 })();
 
 window.StorageManager = StorageManager;

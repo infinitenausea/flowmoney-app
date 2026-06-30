@@ -829,8 +829,7 @@ async function bootstrap() {
 ═══════════════════════════════════════════════════ */
 
 async function initialPull() {
-  const localTxs = Store.state.transactions || [];
-  if (localTxs.length !== 0 || !Store.state.isOnline) return;
+  if (!Store.state.isOnline) return;
 
   try {
     const initData = tg?.initData || '';
@@ -842,7 +841,9 @@ async function initialPull() {
     const data = await response.json();
     if (!data?.items?.length) return;
 
-    StorageManager.bulkLoad(data.items);
+    // mergeFromServer безопасен при любом состоянии localStorage:
+    // добавляет новые записи и не затирает _pending-транзакции.
+    StorageManager.mergeFromServer(data.items);
 
     if (Store.state.currentTab === 'analytics') loadAnalyticsData();
   } catch (err) {

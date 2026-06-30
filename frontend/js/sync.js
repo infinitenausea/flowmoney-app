@@ -12,37 +12,59 @@ const SyncRunner = (() => {
   let _isSyncing = false;
 
   /**
-   * Собирает неотправленные транзакции и отправляет пакет на бэкенд.
-   * Идемпотентно: повторный вызов безопасен (бэкенд использует ON CONFLICT DO UPDATE).
+   * Отправляет локальные pending-транзакции на бэкенд (POST /api/v1/sync).
+   * Идемпотентно: бэкенд использует ON CONFLICT DO UPDATE.
    */
-  async function syncWithBackend() {
-    if (_isSyncing) return;
-
+  async function _push(initData) {
     const pending = StorageManager.getUnsyncedTransactions();
     if (pending.length === 0) return;
 
+    const res = await fetch('/api/v1/sync', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Telegram ${initData}`,
+      },
+      body: JSON.stringify({ transactions: pending }),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    StorageManager.markAsSynced(pending.map(tx => tx.id));
+    console.info('[Sync] Pushed', pending.length, 'transaction(s)');
+  }
+
+  /**
+   * Скачивает последние транзакции с бэкенда и мержит в localStorage.
+   * Это позволяет десктопному клиенту видеть транзакции, добавленные с мобильного.
+   */
+  async function _pull(initData) {
+    const res = await fetch('/api/v1/analytics/timeline?limit=200', {
+      headers: { 'Authorization': `Telegram ${initData}` },
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    if (data?.items?.length) {
+      StorageManager.mergeFromServer(data.items);
+      console.info('[Sync] Pulled', data.items.length, 'transaction(s)');
+    }
+  }
+
+  /**
+   * Двунаправленная синхронизация: сначала пушит локальные изменения,
+   * затем тянет серверные — чтобы изменения с других устройств попали в UI.
+   * Идемпотентно: повторный вызов безопасен.
+   */
+  async function syncWithBackend() {
+    if (_isSyncing) return;
     _isSyncing = true;
 
     try {
       const initData = window.Telegram?.WebApp?.initData || '';
-
-      const res = await fetch('/api/v1/sync', {
-        method:  'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Telegram ${initData}`,
-        },
-        body: JSON.stringify({ transactions: pending }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const syncedIds = pending.map(tx => tx.id);
-      StorageManager.markAsSynced(syncedIds);
-
+      await _push(initData);
+      await _pull(initData);
       Store.state.isOnline = true;
-      console.info('[Sync] Synced', syncedIds.length, 'transaction(s)');
-
     } catch (err) {
       // Offline-first: тихо проглатываем ошибку, повторим позже
       console.warn('[Sync] Failed, will retry:', err.message);
