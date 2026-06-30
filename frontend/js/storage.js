@@ -278,7 +278,7 @@ const StorageManager = (() => {
    * @returns {Object[]} актуальный список пользовательских категорий
    */
   function mergeCategoriesFromServer(serverCats, isBootstrap) {
-    if (!serverCats || serverCats.length === 0) return getUserCategories();
+    if (!serverCats) return getUserCategories();
 
     const localMap = new Map(_userCategories.map(c => [String(c.id), c]));
     let changed = false;
