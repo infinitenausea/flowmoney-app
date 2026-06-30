@@ -264,6 +264,39 @@ func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionPa
 	return err
 }
 
+const upsertCategory = `-- name: UpsertCategory :exec
+INSERT INTO categories (id, user_id, name, color, icon, is_system, sort_order)
+VALUES ($1, $2, $3, $4, $5, false, $6)
+ON CONFLICT (id) DO UPDATE
+SET name       = EXCLUDED.name,
+    color      = EXCLUDED.color,
+    icon       = EXCLUDED.icon,
+    sort_order = EXCLUDED.sort_order
+WHERE categories.is_system = false
+  AND categories.user_id   = EXCLUDED.user_id
+`
+
+type UpsertCategoryParams struct {
+	ID        pgtype.UUID `json:"id"`
+	UserID    int64       `json:"user_id"`
+	Name      string      `json:"name"`
+	Color     string      `json:"color"`
+	Icon      string      `json:"icon"`
+	SortOrder int32       `json:"sort_order"`
+}
+
+func (q *Queries) UpsertCategory(ctx context.Context, arg UpsertCategoryParams) error {
+	_, err := q.db.Exec(ctx, upsertCategory,
+		arg.ID,
+		arg.UserID,
+		arg.Name,
+		arg.Color,
+		arg.Icon,
+		arg.SortOrder,
+	)
+	return err
+}
+
 const upsertUser = `-- name: UpsertUser :one
 INSERT INTO users (tg_id, currency, created_at, updated_at)
 VALUES ($1, $2, NOW(), NOW())

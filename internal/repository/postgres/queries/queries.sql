@@ -59,3 +59,14 @@ VALUES ($1, $2, $3)
 ON CONFLICT (user_id) DO UPDATE
 SET weekly_limit  = EXCLUDED.weekly_limit,
     monthly_limit = EXCLUDED.monthly_limit;
+
+-- name: UpsertCategory :exec
+INSERT INTO categories (id, user_id, name, color, icon, is_system, sort_order)
+VALUES ($1, $2, $3, $4, $5, false, $6)
+ON CONFLICT (id) DO UPDATE
+SET name       = EXCLUDED.name,
+    color      = EXCLUDED.color,
+    icon       = EXCLUDED.icon,
+    sort_order = EXCLUDED.sort_order
+WHERE categories.is_system = false
+  AND categories.user_id   = EXCLUDED.user_id;

@@ -8,6 +8,7 @@
 
 const STORAGE_KEY = 'flowmoney_transactions';
 const LAST_SYNCED_AT_KEY = 'flowmoney_last_synced_at';
+const CATEGORIES_KEY = 'flowmoney_user_categories';
 
 // One-time migration: converts legacy string category IDs (used before UUID system categories
 // were introduced) to the stable UUIDs defined in migration 000002_seed_system_categories.
@@ -24,6 +25,7 @@ const LEGACY_CATEGORY_ID_MAP = {
 
 const StorageManager = (() => {
   let _transactions = [];
+  let _userCategories = [];
 
   function _persist() {
     try {
@@ -71,6 +73,15 @@ const StorageManager = (() => {
 
     Store.state.transactions = [..._transactions];
     console.info('[Storage] Loaded', _transactions.length, 'transaction(s) from localStorage');
+
+    // Load user-created categories
+    try {
+      const rawCats = localStorage.getItem(CATEGORIES_KEY);
+      _userCategories = rawCats ? JSON.parse(rawCats) : [];
+    } catch (e) {
+      console.warn('[Storage] Corrupt user categories, resetting:', e.message);
+      _userCategories = [];
+    }
   }
 
   /**
@@ -223,13 +234,35 @@ const StorageManager = (() => {
   }
 
   /**
+   * Сохраняет пользовательскую категорию локально и обновляет Store.
+   * @param {{ id: string, name: string, icon: string, color: string, is_system: boolean, sort_order: number }} cat
+   */
+  function saveUserCategory(cat) {
+    _userCategories.push(cat);
+    try {
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
+    } catch (e) {
+      console.warn('[Storage] Failed to persist user categories:', e.message);
+    }
+    Store.state.categories = [...(Store.state.categories || []), cat];
+  }
+
+  /**
+   * Возвращает копию массива пользовательских категорий.
+   * @returns {Object[]}
+   */
+  function getUserCategories() {
+    return [..._userCategories];
+  }
+
+  /**
    * Возвращает снимок всех транзакций (только для отладки).
    */
   function _dump() {
     return JSON.parse(JSON.stringify(_transactions));
   }
 
-  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, _dump };
+  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, getUserCategories, _dump };
 })();
 
 window.StorageManager = StorageManager;

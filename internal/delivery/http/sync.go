@@ -23,6 +23,14 @@ type syncTransaction struct {
 	Currency   string    `json:"currency"`
 }
 
+type syncCategory struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Color     string `json:"color"`
+	Icon      string `json:"icon"`
+	SortOrder int32  `json:"sort_order"`
+}
+
 func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tgID, ok := GetTelegramID(r.Context())
@@ -35,6 +43,7 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 
 		type syncRequest struct {
 			Transactions []syncTransaction `json:"transactions"`
+			Categories   []syncCategory    `json:"categories"`
 		}
 		var req syncRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -54,6 +63,29 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		qtx := repository.New(tx)
+
+		for _, c := range req.Categories {
+			id, err := stringToUUID(c.ID)
+			if err != nil {
+				tx.Rollback(r.Context())
+				http.Error(w, "bad request: invalid category id", http.StatusBadRequest)
+				return
+			}
+			err = qtx.UpsertCategory(r.Context(), repository.UpsertCategoryParams{
+				ID:        id,
+				UserID:    tgID,
+				Name:      c.Name,
+				Color:     c.Color,
+				Icon:      c.Icon,
+				SortOrder: c.SortOrder,
+			})
+			if err != nil {
+				log.Printf("SYNC ERROR: upsert category %s: %v", c.ID, err)
+				tx.Rollback(r.Context())
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
 
 		for _, t := range req.Transactions {
 			id, err := stringToUUID(t.ID)

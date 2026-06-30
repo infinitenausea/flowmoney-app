@@ -16,6 +16,7 @@ type Querier interface {
 	GetTransactionsDelta(ctx context.Context, arg GetTransactionsDeltaParams) ([]GetTransactionsDeltaRow, error)
 	UpdateUserCurrency(ctx context.Context, arg UpdateUserCurrencyParams) error
 	UpsertBudget(ctx context.Context, arg UpsertBudgetParams) error
+	UpsertCategory(ctx context.Context, arg UpsertCategoryParams) error
 	UpsertTransaction(ctx context.Context, arg UpsertTransactionParams) error
 	UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error)
 }

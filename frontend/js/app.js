@@ -235,7 +235,164 @@ const NumPad = (() => {
 })();
 
 /* ═══════════════════════════════════════════════════
-   5. Карусель категорий — рендер и выбор
+   5. Шторка создания категории
+═══════════════════════════════════════════════════ */
+
+const CategoryCreationSheet = (() => {
+  const EMOJIS = ['🍕','🚇','🛍️','💊','☕','⚽','🏠','💡','💰','🎮','🎨','✈️'];
+  const COLORS = ['#FF6B6B','#4ECDC4','#45B7D1','#96CEB4','#FFB347','#DDA0DD','#98D8C8','#A29BFE'];
+
+  let _emoji = EMOJIS[0];
+  let _color = COLORS[0];
+
+  const sheet = document.getElementById('category-creation-sheet');
+
+  function _updatePreview() {
+    const icon = document.getElementById('cat-sheet-preview-icon');
+    if (!icon) return;
+    icon.textContent = _emoji;
+    icon.style.background = _color + '22';
+    icon.style.borderColor = _color;
+  }
+
+  function _syncEmojiGrid() {
+    const grid = document.getElementById('cat-emoji-grid');
+    if (!grid) return;
+    grid.querySelectorAll('.cat-emoji-option').forEach(el => {
+      const sel = el.dataset.emoji === _emoji;
+      el.classList.toggle('selected', sel);
+      el.setAttribute('aria-selected', String(sel));
+    });
+  }
+
+  function _syncColorPalette() {
+    const palette = document.getElementById('cat-color-palette');
+    if (!palette) return;
+    palette.querySelectorAll('.cat-color-swatch').forEach(el => {
+      const sel = el.dataset.color === _color;
+      el.classList.toggle('selected', sel);
+      el.setAttribute('aria-selected', String(sel));
+    });
+  }
+
+  function open() {
+    _emoji = EMOJIS[0];
+    _color = COLORS[0];
+    const nameInput = document.getElementById('cat-sheet-name');
+    if (nameInput) nameInput.value = '';
+    _updatePreview();
+    _syncEmojiGrid();
+    _syncColorPalette();
+    requestAnimationFrame(() => {
+      sheet.classList.add('active');
+      sheet.removeAttribute('aria-hidden');
+    });
+  }
+
+  function close() {
+    sheet.classList.remove('active');
+    setTimeout(() => sheet.setAttribute('aria-hidden', 'true'), 340);
+  }
+
+  function _confirm() {
+    const nameInput = document.getElementById('cat-sheet-name');
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) {
+      tg?.HapticFeedback?.notificationOccurred?.('error');
+      if (nameInput) {
+        nameInput.classList.add('error');
+        setTimeout(() => nameInput.classList.remove('error'), 400);
+      }
+      return;
+    }
+
+    const cat = {
+      id:        self.crypto.randomUUID(),
+      user_id:   null,
+      name,
+      icon:      _emoji,
+      color:     _color,
+      is_system: false,
+      sort_order: 999,
+    };
+
+    tg?.HapticFeedback?.impactOccurred('medium');
+    StorageManager.saveUserCategory(cat);
+    SyncRunner.syncWithBackend();
+    close();
+  }
+
+  function init() {
+    if (!sheet) return;
+
+    const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
+    if (backdrop) backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); close(); });
+
+    const closeBtn = document.getElementById('cat-sheet-close');
+    if (closeBtn) closeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); close(); });
+
+    const confirmBtn = document.getElementById('cat-sheet-confirm');
+    if (confirmBtn) confirmBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); _confirm(); });
+
+    // Build emoji grid via createElement (XSS-safe; values are hardcoded)
+    const grid = document.getElementById('cat-emoji-grid');
+    if (grid) {
+      const frag = document.createDocumentFragment();
+      EMOJIS.forEach(emoji => {
+        const el = document.createElement('div');
+        el.className = 'cat-emoji-option' + (emoji === _emoji ? ' selected' : '');
+        el.dataset.emoji = emoji;
+        el.textContent = emoji;
+        el.setAttribute('role', 'option');
+        el.setAttribute('aria-selected', String(emoji === _emoji));
+        frag.appendChild(el);
+      });
+      grid.appendChild(frag);
+
+      grid.addEventListener('pointerdown', (e) => {
+        const opt = e.target.closest('.cat-emoji-option');
+        if (!opt) return;
+        e.preventDefault();
+        tg?.HapticFeedback?.impactOccurred('light');
+        _emoji = opt.dataset.emoji;
+        _updatePreview();
+        _syncEmojiGrid();
+      });
+    }
+
+    // Build color palette via createElement (XSS-safe; values are hardcoded)
+    const palette = document.getElementById('cat-color-palette');
+    if (palette) {
+      const frag = document.createDocumentFragment();
+      COLORS.forEach(color => {
+        const el = document.createElement('div');
+        el.className = 'cat-color-swatch' + (color === _color ? ' selected' : '');
+        el.dataset.color = color;
+        el.style.background = color;
+        el.setAttribute('role', 'option');
+        el.setAttribute('aria-label', color);
+        el.setAttribute('aria-selected', String(color === _color));
+        frag.appendChild(el);
+      });
+      palette.appendChild(frag);
+
+      palette.addEventListener('pointerdown', (e) => {
+        const swatch = e.target.closest('.cat-color-swatch');
+        if (!swatch) return;
+        e.preventDefault();
+        tg?.HapticFeedback?.impactOccurred('light');
+        _color = swatch.dataset.color;
+        _updatePreview();
+        _syncColorPalette();
+      });
+    }
+  }
+
+  return { init, open, close };
+})();
+
+/* ═══════════════════════════════════════════════════
+   5а. Карусель категорий — рендер и выбор
 ═══════════════════════════════════════════════════ */
 
 const CategoryCarousel = (() => {
@@ -257,6 +414,9 @@ const CategoryCarousel = (() => {
     const carousel = document.getElementById('category-carousel');
     if (!carousel) return;
 
+    // Preserve selected category across re-renders
+    const prevSelectedId = Store.state.selectedCategory;
+
     carousel.textContent = '';
 
     const fragment = document.createDocumentFragment();
@@ -265,7 +425,10 @@ const CategoryCarousel = (() => {
       item.className = 'category-item';
       item.setAttribute('role', 'option');
       item.dataset.id = cat.id;
-      item.setAttribute('aria-selected', 'false');
+
+      const isSelected = cat.id === prevSelectedId;
+      item.setAttribute('aria-selected', String(isSelected));
+      if (isSelected) item.classList.add('selected');
 
       const iconEl = document.createElement('div');
       iconEl.className = 'category-icon';
@@ -281,31 +444,61 @@ const CategoryCarousel = (() => {
       item.appendChild(nameEl);
       fragment.appendChild(item);
     });
+
+    // Trailing "+" button — triggers CategoryCreationSheet
+    const addBtn = document.createElement('div');
+    addBtn.className = 'category-add-btn';
+    addBtn.setAttribute('role', 'button');
+    addBtn.setAttribute('aria-label', 'Добавить категорию');
+
+    const addIcon = document.createElement('div');
+    addIcon.className = 'category-add-icon';
+    addIcon.textContent = '+';
+
+    const addLabel = document.createElement('span');
+    addLabel.className = 'category-add-label';
+    addLabel.textContent = 'Ещё';
+
+    addBtn.appendChild(addIcon);
+    addBtn.appendChild(addLabel);
+    fragment.appendChild(addBtn);
+
     carousel.appendChild(fragment);
-
-    carousel.addEventListener('pointerdown', (e) => {
-      const item = e.target.closest('.category-item');
-      if (!item) return;
-
-      tg?.HapticFeedback?.impactOccurred('light');
-
-      const prevSelected = carousel.querySelector('.category-item.selected');
-      if (prevSelected) {
-        prevSelected.classList.remove('selected');
-        prevSelected.setAttribute('aria-selected', 'false');
-      }
-
-      item.classList.add('selected');
-      item.setAttribute('aria-selected', 'true');
-      Store.state.selectedCategory = item.dataset.id;
-    });
   }
 
   function init() {
-    // Сразу рисуем дефолтные, потом перерисуем с данными с бэкенда
-    render(DEFAULT_CATEGORIES);
+    // Render immediately with defaults + any user categories already in localStorage
+    render([...DEFAULT_CATEGORIES, ...StorageManager.getUserCategories()]);
 
-    // Реагируем на загрузку категорий с сервера
+    // Single delegated listener — covers both category items and the "+" button.
+    // Added once in init() so re-renders (render()) never stack up listeners.
+    const carousel = document.getElementById('category-carousel');
+    if (carousel) {
+      carousel.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.category-add-btn')) {
+          e.preventDefault();
+          tg?.HapticFeedback?.impactOccurred('light');
+          CategoryCreationSheet.open();
+          return;
+        }
+
+        const item = e.target.closest('.category-item');
+        if (!item) return;
+
+        tg?.HapticFeedback?.impactOccurred('light');
+
+        carousel.querySelectorAll('.category-item.selected').forEach(el => {
+          el.classList.remove('selected');
+          el.setAttribute('aria-selected', 'false');
+        });
+
+        item.classList.add('selected');
+        item.setAttribute('aria-selected', 'true');
+        Store.state.selectedCategory = item.dataset.id;
+      });
+    }
+
+    // Re-render when server categories arrive (or when user adds a new one)
     Store.subscribe('categories', (cats) => {
       if (cats && cats.length > 0) render(cats);
     });
@@ -885,7 +1078,8 @@ async function bootstrap() {
       currency:     data.currency        || 'RUB',
       weeklyLimit:  budget.weekly_limit  || 0,
       monthlyLimit: budget.monthly_limit || 0,
-      categories:   data.categories      || [],
+      // Merge server categories with locally-created user categories
+      categories:   [...(data.categories || []), ...StorageManager.getUserCategories()],
       rates:        data.rates           || {},
     });
 
@@ -971,6 +1165,7 @@ async function init() {
   initBindings();
   Router.init();
   NumPad.init();
+  CategoryCreationSheet.init();
   CategoryCarousel.init();
   initAnalytics();          // свайпы + подписки вкладки аналитики
   initNetworkWatcher();
@@ -994,4 +1189,4 @@ if (document.readyState === 'loading') {
 }
 
 // Глобальный экспорт для отладки в консоли
-window.App = { Store, Router, StorageManager, SyncRunner, DonutChart, SwipeGesture, Settings, CalendarSheet, formatCurrency, getCurrencySymbol };
+window.App = { Store, Router, StorageManager, SyncRunner, DonutChart, SwipeGesture, Settings, CalendarSheet, CategoryCreationSheet, formatCurrency, getCurrencySymbol };

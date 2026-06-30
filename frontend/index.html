@@ -345,6 +345,33 @@
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════
+       Шторка: создание категории
+  ═══════════════════════════════════════ -->
+  <div id="category-creation-sheet" class="bottom-sheet" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Новая категория">
+    <div class="bottom-sheet-backdrop"></div>
+    <div class="bottom-sheet-panel bottom-sheet-panel--scroll">
+      <div class="bottom-sheet-handle"></div>
+      <div class="cat-sheet-header">
+        <span class="cat-sheet-title">Новая категория</span>
+        <button id="cat-sheet-close" class="budget-modal-close" aria-label="Закрыть">✕</button>
+      </div>
+      <div class="cat-sheet-preview">
+        <div id="cat-sheet-preview-icon" class="cat-sheet-preview-icon">💰</div>
+      </div>
+      <div class="cat-sheet-field">
+        <input type="text" id="cat-sheet-name" class="cat-sheet-input"
+               placeholder="Название" maxlength="24" autocomplete="off"
+               inputmode="text" enterkeyhint="done" />
+      </div>
+      <div class="cat-sheet-section-label">Иконка</div>
+      <div id="cat-emoji-grid" class="cat-emoji-grid" role="listbox" aria-label="Иконка категории"></div>
+      <div class="cat-sheet-section-label">Цвет</div>
+      <div id="cat-color-palette" class="cat-color-palette" role="listbox" aria-label="Цвет категории"></div>
+      <button id="cat-sheet-confirm" class="btn-save-limit cat-sheet-confirm">Добавить</button>
+    </div>
+  </div>
+
   <script src="js/store.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/sync.js"></script>

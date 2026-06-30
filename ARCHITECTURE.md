@@ -76,7 +76,8 @@ initTheme()             applyTheme(tg.themeParams), subscribe themeChanged
 updateAnalyticsRange()  вычисляет start/end Unix-мс для 'month'; ранний вызов гарантирует
                         заполнение Store.state.analyticsRange до StorageManager и первого рендера
 StorageManager.init()   load transactions from localStorage, run UUID migration
-Settings.init()         load budget limits from localStorage, wire currency/limit controls
+Settings.init()         load budget limits from localStorage, wire currency/limit controls;
+                        BudgetCard.init() wires the Week/Month period toggle on the Home screen
 initBindings()          reactive DOM ← Store subscriptions
 Router.init()           wire nav tabs, set currentTab = 'home'
 NumPad.init()           wire numpad pointerdown events
@@ -215,7 +216,6 @@ On first call for a new `telegram_id`, `UpsertUser` creates the user row (defaul
 {
   "currency": "USD",
   "budget": {
-    "daily_limit": 0,
     "weekly_limit": 5000,
     "monthly_limit": 0
   },
@@ -267,7 +267,6 @@ All items are processed in a single `BEGIN/COMMIT` transaction. Each item is an 
 ```json
 {
   "currency": "RUB",
-  "daily_limit": 0,
   "weekly_limit": 5000,
   "monthly_limit": 20000
 }
@@ -533,7 +532,6 @@ CREATE INDEX idx_transactions_user_timeline
 
 CREATE TABLE budgets (
     user_id       BIGINT         PRIMARY KEY REFERENCES users(tg_id) ON DELETE CASCADE,
-    daily_limit   DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (daily_limit >= 0),
     weekly_limit  DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (weekly_limit >= 0),
     monthly_limit DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (monthly_limit >= 0)
 );
@@ -578,6 +576,12 @@ ALTER TABLE transactions
 ```
 
 ```sql
+-- 000005_drop_budget_daily_limit.up.sql
+
+ALTER TABLE budgets DROP COLUMN IF EXISTS daily_limit;
+```
+
+```sql
 -- Homegrown migration tracker (created by CI script inline, not a migration file)
 CREATE TABLE IF NOT EXISTS _schema_migrations (
     filename   TEXT        PRIMARY KEY,
@@ -618,7 +622,7 @@ transactions (
 | `ON DELETE CASCADE` | budgets → users | Deleting a user wipes their budget row |
 | `ON DELETE RESTRICT` | transactions → categories | Prevents orphan transactions; category can't be deleted while in use |
 | `CHECK (amount > 0)` | transactions | Enforces positive amounts at DB level |
-| `CHECK (daily/weekly/monthly_limit >= 0)` | budgets | Limits can be zero (disabled) but not negative |
+| `CHECK (weekly/monthly_limit >= 0)` | budgets | Limits can be zero (disabled) but not negative |
 | `TIMESTAMPTZ` | all date columns | Stored as UTC; no timezone-aware confusion |
 
 ### 6.4 Query Notes
@@ -734,12 +738,14 @@ Day numbers rendered via `document.createTextNode(String(day))` — HTML parsing
 
 ### 8.3 NumPad Input Limits
 
-| Limit | Numpad (home screen) | Budget modal (settings) |
-|---|---|---|
-| Max integer digits | 6 | 7 |
-| Max decimal digits | 2 | 2 |
-| Max value | 999,999 | 9,999,999 |
-| Source | `app.js MAX_DIGITS/MAX_AMOUNT` | `settings.js MAX_DIGITS/MAX_AMOUNT` |
+| Limit | Budget modal (settings) |
+|---|---|
+| Max integer digits | 7 |
+| Max decimal digits | 2 |
+| Max value | 9,999,999 |
+| Source | `settings.js MAX_DIGITS/MAX_AMOUNT` |
+
+The home screen NumPad (transaction amount entry) retains its own limits (`app.js MAX_DIGITS/MAX_AMOUNT`: 6 integer digits, max 999,999) but is not associated with any budget limit input.
 
 The DB `CHECK (amount > 0)` is the only server-side amount guard; there is no server-side upper-bound validation.
 
