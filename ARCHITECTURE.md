@@ -72,18 +72,23 @@ Exact order inside `init()`:
 ```
 initTelegram()          tg.ready(), tg.expand(), body height lock, safe-area-bottom CSS var
 initTheme()             applyTheme(tg.themeParams), subscribe themeChanged
+updateAnalyticsRange()  вычисляет start/end Unix-мс для 'month'; ранний вызов гарантирует
+                        заполнение Store.state.analyticsRange до StorageManager и первого рендера
 StorageManager.init()   load transactions from localStorage, run UUID migration
 Settings.init()         load budget limits from localStorage, wire currency/limit controls
 initBindings()          reactive DOM ← Store subscriptions
 Router.init()           wire nav tabs, set currentTab = 'home'
 NumPad.init()           wire numpad pointerdown events
 CategoryCarousel.init() render default categories, subscribe to Store.categories
-initAnalytics()         subscribe currentTab/selectedAnalyticsCategory/transactions, init SwipeGesture
+initAnalytics()         initPeriodSwitcher() + CalendarSheet.init() + SwipeGesture.init();
+                        subscribe currentTab / selectedAnalyticsCategory / transactions
 initNetworkWatcher()    window online/offline → Store.state.isOnline
 
 await Promise.all([bootstrap(), wait 400ms])   // skeleton shown ≥ 400 ms
 
 hideSkeleton()          fade-out skeleton (280 ms), reveal #app
+initialPull()           GET /api/v1/analytics/timeline?limit=200 если localStorage пуст;
+                        StorageManager.bulkLoad() → реактивное обновление Store + UI
 SyncRunner.start()      immediate sync attempt + 15 s interval + online event
 ```
 
@@ -134,6 +139,47 @@ The single `<div id="currency-options-sheet">` element is a shared, reusable bot
 **Close:** `_closeCurrencySheet()` removes `.active`; `aria-hidden="true"` is restored after a 340 ms CSS transition delay. The backdrop's `pointerdown` also triggers close.
 
 **Selection dispatch:** The `pointerdown` listener on each `.currency-sheet-option` reads `opt.dataset.currency` and branches on `_activeCurrencyTarget`. All three code paths end with `_closeCurrencySheet()`. All bindings use `pointerdown` with `e.preventDefault()` — consistent with the rest of the app's tap-delay elimination strategy (see §2.5).
+
+### 2.7 Кастомный календарь-шторка (`#calendar-sheet`)
+
+`CalendarSheet` — приватный IIFE-модуль в `app.js`, инициализируемый из `initAnalytics()`. Управляет вводом кастомных дат без вызова системной клавиатуры устройства.
+
+**DOM-элементы:**
+
+| Элемент | Роль |
+|---|---|
+| `#calendar-sheet` | Bottom Sheet; `classList.add/remove('active')` для показа/скрытия |
+| `#calendar-start-trigger` | `pointerdown` → `CalendarSheet.open('start')` |
+| `#calendar-end-trigger` | `pointerdown` → `CalendarSheet.open('end')` |
+| `#calendar-start-label` / `#calendar-end-label` | Текст выбранных дат (`DD.MM.YYYY`); обновляется через `textContent` |
+| `#calendar-month-label` | Заголовок месяца; `textContent = MONTHS_RU[viewMonth] + ' ' + viewYear` |
+| `#calendar-grid` | Контейнер сетки; очищается `grid.textContent = ''` перед каждым рендером |
+| `.calendar-weekdays` | Заголовки дней недели; строятся один раз в `init()` через `createElement + textContent` |
+| `#calendar-prev` / `#calendar-next` | `pointerdown` — навигация по месяцам |
+| `.bottom-sheet-backdrop` | `pointerdown` → `close()` |
+
+**Механика открытия (`open(target)`):**
+1. Записывает `currentTarget` (`'start'` | `'end'`).
+2. Вычисляет стартовый месяц из `Store.state.analyticsRange[target]` (или текущей даты, если `null`).
+3. Вызывает `renderGrid()`, затем `sheet.classList.add('active')` + убирает `aria-hidden`.
+
+**Рендер сетки (`renderGrid()`):**
+- Вычисляет смещение первого дня (пн=0): `(firstDow + 6) % 7` — без привязки к воскресенью как нулевому дню.
+- Для каждого дня создаёт `div.calendar-day` и число через **`document.createTextNode(String(day))`** — строго без HTML-парсинга (защита от XSS согласно §6.2).
+- Классы `today`, `range-start`, `range-end`, `in-range` проставляются сравнением нормализованных Unix-таймстампов (`new Date(year, month, day).getTime()`).
+- Дни строятся в `DocumentFragment` и вставляются единственным `appendChild`.
+
+**Выбор дня (`handleDayTap(day)`):**
+- `dayStart` = `new Date(viewYear, viewMonth, day).getTime()` (00:00:00.000 в мс).
+- `dayEnd` = `new Date(viewYear, viewMonth, day, 23, 59, 59, 999).getTime()`.
+- При `currentTarget === 'start'`: пишет `newStart`; если `newStart > newEnd` — принудительно подтягивает `newEnd = dayEnd` (корректировка инверсии).
+- При `currentTarget === 'end'`: пишет `newEnd`; если `newEnd < newStart` — принудительно подтягивает `newStart = dayStart`.
+- Записывает `Store.state.analyticsRange = { start: newStart, end: newEnd }` — только числа в мс, без `Date`-объектов.
+- Устанавливает `Store.state.analyticsPeriod = 'custom'`.
+- Если `Store.state.currentTab === 'analytics'` — немедленно вызывает `loadAnalyticsData()`.
+- Вызывает `close()`.
+
+**Навигация по месяцам:** `#calendar-prev` / `#calendar-next` — `pointerdown` + `e.preventDefault()` + Haptic `'light'`; декремент/инкремент `viewMonth` с перемоткой `viewYear` на границах `0 ↔ 11`; перерисовка сетки.
 
 ---
 
@@ -388,8 +434,11 @@ FlowMoney-app/
 │   ├── index.html              Single HTML shell; skeleton loader, three screen divs, bottom nav
 │   ├── css/style.css           All styles; CSS custom properties for Telegram theme vars
 │   └── js/
-│       ├── store.js            Reactive Proxy-based Store; key-scoped subscriptions; batchUpdate
-│       ├── storage.js          StorageManager: localStorage r/w; UUID migration; soft-delete
+│       ├── store.js            Reactive Proxy-based Store; key-scoped subscriptions; batchUpdate;
+│       │                       State: analyticsPeriod ('day'|'month'|'custom'),
+│       │                       analyticsRange ({start, end} — Unix-таймстампы в мс)
+│       ├── storage.js          StorageManager: localStorage r/w; UUID migration; soft-delete;
+│       │                       bulkLoad(items) — одноразовый initial pull с сервера
 │       ├── sync.js             SyncRunner: 15 s interval + online event; _isSyncing mutex flag
 │       ├── settings.js         Settings: currency/limit controls; debounced server sync (1500 ms); converter widget
 │       ├── app.js              App entry: Telegram SDK init, Theme, Router, NumPad, CategoryCarousel, bindings
@@ -466,6 +515,8 @@ The DB `CHECK (amount > 0)` is the only server-side amount guard; there is no se
 | SyncRunner interval | 15 000 ms |
 | RatesManager refresh interval | 12 h |
 | RatesManager HTTP timeout | 10 s |
+
+> **Безопасность кастомного ввода дат:** Кастомные диапазоны хранятся в `Store.state.analyticsRange` исключительно как числа (Unix-мс). Рендеринг чисел дней в сетке `#calendar-grid` выполняется через `document.createTextNode(String(day))` — HTML-парсинг исключён, инъекция разметки невозможна (защита от XSS в соответствии с §6.2).
 
 ### 6.5 Server Timeouts
 
@@ -554,9 +605,42 @@ The conversion is skipped when `txCurrency === Store.state.currency` (amounts al
 
 ---
 
-### ~~Risk 8 — Ограничение аналитики фиксированным месяцем и системными селектами~~ ✅ FIXED 2026-06-30
+### ~~Risk 8 — Аналитика произвольных интервалов и кастомный UX календаря~~ ✅ FIXED 2026-06-30
 
-**Внедрение произвольных интервалов и кастомного календаря:**
-- Логика `computeLocalDonutData()` расширена: жесткая фильтрация по текущему месяцу заменена на динамический диапазон. Фильтрация идет по условию `txTime >= start && txTime <= end`.
-- Для реактивного стейта `Store.state.analyticsRange` использованы Unix-таймстампы (числа в мс) вместо объектов `Date`. Это предотвращает поломку внутренних механизмов JS-движка (`[[DateValue]]`) при рекурсивном оборачивании объектов в `Proxy`.
-- Переключение периодов (`'day' | 'month' | 'custom'`) реализовано через делегирование pointerdown-событий на контейнере `.analytics-period-switcher`. При выборе `'custom'` отображается блок с двумя нативными HTML5-инпутами дат, стилизованными под переменные Telegram-темы. Рендеринг пончика триггерится автоматически за счет реактивных подписок на стейт.
+**Проблема:** Жёсткая фильтрация пончика по текущему календарному месяцу (серверный `DATE_TRUNC`) делала выборку данных негибкой. Нативные `<input type="date">` вызывают системную клавиатуру устройства — неприемлемо в Telegram Mini App.
+
+**Решения:**
+
+**1. Динамический диапазон в `computeLocalDonutData()` (`app.js`):**
+
+Жёсткая месячная граница заменена на фильтрацию по `Store.state.analyticsRange`:
+
+```js
+const txTime = new Date(tx.created_at).getTime();
+return txTime >= start && txTime <= end;
+```
+
+Диапазон пересчитывается функцией `updateAnalyticsRange()` при смене `analyticsPeriod` (`'day'` | `'month'`). При `period === 'custom'` функция выполняет **ранний возврат** (`if (period === 'custom') return`), защищая пользовательский диапазон от перезаписи дефолтными месячными расчётами при срабатывании Store-подписок или повторном вызове.
+
+**2. Unix-таймстампы в `Store.state.analyticsRange` вместо `Date`-объектов:**
+
+`Store.state.analyticsRange` хранит `{ start: number, end: number }` в мс с начала эпохи. Это архитектурное решение предотвращает поломку внутренних слотов JS-движка (`[[DateValue]]`): рекурсивный Proxy в `store.js` оборачивает любой вложенный объект в новый `Proxy`-обёртку, что разрушает непередаваемые внутренние слоты `Date`. Примитивные числа Proxy-оборачиванием не затрагиваются.
+
+**3. Кастомный `CalendarSheet` (§2.7) вместо нативных `<input type="date">`:**
+
+Bottom Sheet генерирует сетку дней нативными средствами Vanilla JS без системной клавиатуры. Числа дней рендерятся через `document.createTextNode` — XSS-безопасно (§6.2). Переключение периодов делегировано `pointerdown` на `.analytics-period-switcher`; при `'custom'` отображается `#custom-date-picker` с двумя триггер-кнопками (`#calendar-start-trigger`, `#calendar-end-trigger`). Рендер пончика триггерится реактивно через Store-подписки на `analyticsRange` и `analyticsPeriod`.
+
+**4. Механика Initial Pull (`initialPull()` в `app.js` + `StorageManager.bulkLoad()` в `storage.js`):**
+
+При старте приложения на новом устройстве (или после очистки браузера) `localStorage` пуст. После `hideSkeleton()` вызывается асинхронная `initialPull()`:
+
+```js
+// app.js — условие запуска
+if (localTxs.length !== 0 || !Store.state.isOnline) return;
+
+// Неблокирующий запрос истории (максимум 200 транзакций)
+const response = await fetch('/api/v1/analytics/timeline?limit=200', { ... });
+StorageManager.bulkLoad(data.items);
+```
+
+`StorageManager.bulkLoad(items)` (`storage.js`) принимает транзакции из API, проставляет им `synced: true, _pending: false` и сохраняет в localStorage, после чего реактивно обновляет `Store.state.transactions`. Вызов защищён guard'ом `if (_transactions.length > 0) return` — повторная загрузка при непустом хранилище невозможна. `initialPull()` не блокирует UI: вызывается после `hideSkeleton()` без `await` в родительском `init()`.
