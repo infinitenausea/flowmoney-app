@@ -72,9 +72,12 @@ const SyncRunner = (() => {
 
     if (bootstrapRes.ok) {
       const bData = await bootstrapRes.json();
-      const serverCats = bData.categories || [];
+      // Use ?? so an explicit null/undefined falls back to []; an explicit [] is preserved.
+      const serverCats = bData.categories ?? [];
+      // Always merge — even when serverCats is [] — so that categories deleted on another
+      // device are evicted from the local cache immediately without a page reload.
+      StorageManager.mergeCategoriesFromServer(serverCats, false);
       if (serverCats.length) {
-        StorageManager.mergeCategoriesFromServer(serverCats, false);
         console.info('[Sync] Pulled', serverCats.length, 'category(ies)');
       }
     }

@@ -333,18 +333,19 @@ const StorageManager = (() => {
         console.warn('[Storage] Failed to persist merged categories:', e.message);
       }
 
-      if (isBootstrap) {
-        // Force-refresh internal cache on bootstrap to ensure atomic update of runtime state
-        const freshCats = getUserCategories();
-        Store.state.categories = freshCats;
+      const result = getUserCategories();
+      Store.state.categories = result;
+
+      if (!isBootstrap) {
+        // Notify transactions subscribers so analytics refreshes category names/colors.
+        Store.state.transactions = [...(Store.state.transactions || [])];
+        // Directly drive the carousel — handles empty-array eviction that the Store
+        // subscriber's Array.isArray guard would otherwise catch defensively.
+        CategoryCarousel.render(result);
       }
     }
 
-    const result = getUserCategories();
-    Store.state.categories = result;
-    Store.state.transactions = [...(Store.state.transactions || [])];
-    if (!isBootstrap) CategoryCarousel.render(result);
-    return result;
+    return getUserCategories();
   }
 
   /**

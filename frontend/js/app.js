@@ -641,9 +641,10 @@ const CategoryCarousel = (() => {
       }
     }
 
-    // Re-render when server categories arrive (or when user adds a new one)
+    // Re-render whenever categories change, including an empty array (all deleted).
+    // Array.isArray guards against the null/undefined default before StorageManager.init() runs.
     Store.subscribe('categories', (cats) => {
-      if (cats && cats.length > 0) render(cats);
+      if (Array.isArray(cats)) render(cats);
     });
   }
 
