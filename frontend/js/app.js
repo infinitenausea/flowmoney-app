@@ -356,10 +356,14 @@ function initBindings() {
     }
   });
 
-  // Символ валюты + обновление текстовых меток пончика (без перерисовки SVG)
+  // Символ валюты + обновление текстовых меток пончика (без перерисовки SVG-сегментов)
   Store.subscribe('currency', (val) => {
     if (currencySymbol) currencySymbol.textContent = getCurrencySymbol(val);
-    if (Store.state.currentTab === 'analytics') DonutChart.refreshCurrencyLabels(val);
+    if (Store.state.currentTab === 'analytics') {
+      // Пересчитываем суммы в новой валюте через rates, затем обновляем только текст.
+      const freshData = computeLocalDonutData();
+      DonutChart.refreshCurrencyLabels(val, freshData);
+    }
   });
 
   function updateAddButton() {

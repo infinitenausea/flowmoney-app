@@ -318,12 +318,18 @@ const DonutChart = (() => {
     Store.state.selectedAnalyticsCategory = null;
   }
 
-  // Updates only currency text nodes — no SVG redraw, no data recompute.
-  // Safe to call whenever the display currency changes.
-  function refreshCurrencyLabels(newCurrency) {
-    if (!_lastContId || !_lastData.length) return;
+  // Updates currency text nodes only — no SVG segment redraw.
+  // freshData: output of computeLocalDonutData() already converted to newCurrency.
+  // Caller is responsible for conversion; this function only writes text.
+  function refreshCurrencyLabels(newCurrency, freshData) {
+    if (!_lastContId) return;
     const container = document.getElementById(_lastContId);
     if (!container) return;
+
+    // Accept freshly-converted data from caller and keep _lastData in sync
+    // so that subsequent _onTap re-renders also use correct amounts.
+    if (freshData && freshData.length) _lastData = freshData;
+    if (!_lastData.length) return;
 
     const cur   = newCurrency || Store.state.currency || 'RUB';
     const sym   = typeof getCurrencySymbol === 'function' ? getCurrencySymbol(cur) : cur;
