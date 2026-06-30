@@ -1200,8 +1200,8 @@ async function bootstrap() {
       currency:     data.currency        || 'RUB',
       weeklyLimit:  budget.weekly_limit  || 0,
       monthlyLimit: budget.monthly_limit || 0,
-      // Merge server categories with locally-created user categories
-      categories:   [...(data.categories || []), ...StorageManager.getUserCategories()],
+      // Merge server categories into local storage, deduped strictly by UUID
+      categories:   StorageManager.mergeCategoriesFromServer(data.categories || []),
       rates:        data.rates           || {},
     });
 

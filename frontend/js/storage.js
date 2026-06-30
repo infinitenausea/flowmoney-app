@@ -254,7 +254,7 @@ const StorageManager = (() => {
    * @param {Object} cat — категория с обновлёнными полями; cat.id должен существовать
    */
   function updateUserCategory(cat) {
-    const idx = _userCategories.findIndex(c => c.id === cat.id);
+    const idx = _userCategories.findIndex(c => String(c.id) === String(cat.id));
     if (idx === -1) return;
     _userCategories[idx] = { ...cat, synced: false };
     try {
@@ -265,6 +265,47 @@ const StorageManager = (() => {
     Store.state.categories = (Store.state.categories || []).map(c =>
       c.id === cat.id ? _userCategories[idx] : c
     );
+  }
+
+  /**
+   * Мержит категории с сервера в локальное хранилище, индексируя строго по UUID.
+   * — Серверная версия перезаписывает локальную, КРОМЕ случая, когда локальная
+   *   запись ещё не синхронизирована (synced: false) — она в полёте и не должна
+   *   быть затёрта устаревшими серверными данными (та же логика, что и для транзакций).
+   * — Сравнение id всегда идёт по строке, чтобы избежать дублей из-за разного типа/регистра.
+   * @param {Object[]} serverCats — категории из API
+   * @returns {Object[]} актуальный список пользовательских категорий
+   */
+  function mergeCategoriesFromServer(serverCats) {
+    if (!serverCats || serverCats.length === 0) return getUserCategories();
+
+    const localMap = new Map(_userCategories.map(c => [String(c.id), c]));
+    let changed = false;
+
+    serverCats.forEach(serverCat => {
+      const id = String(serverCat.id);
+      const local = localMap.get(id);
+
+      if (local && local.synced === false) {
+        // Локальная запись ещё не отправлена/подтверждена — не трогаем.
+        return;
+      }
+
+      localMap.set(id, { ...serverCat, id, synced: true });
+      changed = true;
+    });
+
+    _userCategories = Array.from(localMap.values());
+
+    if (changed) {
+      try {
+        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
+      } catch (e) {
+        console.warn('[Storage] Failed to persist merged categories:', e.message);
+      }
+    }
+
+    return getUserCategories();
   }
 
   /**
@@ -310,7 +351,7 @@ const StorageManager = (() => {
     return JSON.parse(JSON.stringify(_transactions));
   }
 
-  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, updateUserCategory, getUserCategories, getUnsyncedCategories, markCategoriesAsSynced, _dump };
+  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, updateUserCategory, getUserCategories, getUnsyncedCategories, markCategoriesAsSynced, mergeCategoriesFromServer, _dump };
 })();
 
 window.StorageManager = StorageManager;
