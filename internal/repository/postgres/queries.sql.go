@@ -63,6 +63,7 @@ const getCategoriesByUserId = `-- name: GetCategoriesByUserId :many
 SELECT id, user_id, name, color, icon, is_system, sort_order
 FROM categories
 WHERE user_id = $1
+  AND is_deleted = false
 ORDER BY sort_order ASC
 `
 
@@ -226,13 +227,14 @@ func (q *Queries) UpsertBudget(ctx context.Context, arg UpsertBudgetParams) erro
 }
 
 const upsertCategory = `-- name: UpsertCategory :exec
-INSERT INTO categories (id, user_id, name, color, icon, sort_order)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO categories (id, user_id, name, color, icon, sort_order, is_deleted)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO UPDATE
 SET name       = EXCLUDED.name,
     color      = EXCLUDED.color,
     icon       = EXCLUDED.icon,
-    sort_order = EXCLUDED.sort_order
+    sort_order = EXCLUDED.sort_order,
+    is_deleted = EXCLUDED.is_deleted
 WHERE categories.user_id = EXCLUDED.user_id
 `
 
@@ -243,6 +245,7 @@ type UpsertCategoryParams struct {
 	Color     string      `json:"color"`
 	Icon      string      `json:"icon"`
 	SortOrder int32       `json:"sort_order"`
+	IsDeleted bool        `json:"is_deleted"`
 }
 
 func (q *Queries) UpsertCategory(ctx context.Context, arg UpsertCategoryParams) error {
@@ -253,6 +256,7 @@ func (q *Queries) UpsertCategory(ctx context.Context, arg UpsertCategoryParams) 
 		arg.Color,
 		arg.Icon,
 		arg.SortOrder,
+		arg.IsDeleted,
 	)
 	return err
 }

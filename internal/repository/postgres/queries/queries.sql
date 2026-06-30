@@ -14,6 +14,7 @@ WHERE user_id = $1;
 SELECT id, user_id, name, color, icon, is_system, sort_order
 FROM categories
 WHERE user_id = $1
+  AND is_deleted = false
 ORDER BY sort_order ASC;
 
 -- name: GetAnalyticsDonut :many
@@ -62,11 +63,12 @@ SET weekly_limit  = EXCLUDED.weekly_limit,
     monthly_limit = EXCLUDED.monthly_limit;
 
 -- name: UpsertCategory :exec
-INSERT INTO categories (id, user_id, name, color, icon, sort_order)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO categories (id, user_id, name, color, icon, sort_order, is_deleted)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO UPDATE
 SET name       = EXCLUDED.name,
     color      = EXCLUDED.color,
     icon       = EXCLUDED.icon,
-    sort_order = EXCLUDED.sort_order
+    sort_order = EXCLUDED.sort_order,
+    is_deleted = EXCLUDED.is_deleted
 WHERE categories.user_id = EXCLUDED.user_id;

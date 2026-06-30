@@ -22,6 +22,7 @@ type Category struct {
 	Icon      string      `json:"icon"`
 	IsSystem  bool        `json:"is_system"`
 	SortOrder int32       `json:"sort_order"`
+	IsDeleted bool        `json:"is_deleted"`
 }
 
 type Transaction struct {

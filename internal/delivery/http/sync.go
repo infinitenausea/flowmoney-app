@@ -30,6 +30,7 @@ type syncCategory struct {
 	Color     string `json:"color"`
 	Icon      string `json:"icon"`
 	SortOrder int32  `json:"sort_order"`
+	IsDeleted bool   `json:"is_deleted"`
 }
 
 func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
@@ -79,6 +80,7 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				Color:     c.Color,
 				Icon:      c.Icon,
 				SortOrder: c.SortOrder,
+				IsDeleted: c.IsDeleted,
 			})
 			if err != nil {
 				log.Printf("SYNC ERROR: upsert category %s: %v", c.ID, err)

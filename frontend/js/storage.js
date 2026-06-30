@@ -297,6 +297,11 @@ const StorageManager = (() => {
       const id = String(serverCat.id);
       const local = localMap.get(id);
 
+      if (serverCat.is_deleted === true) {
+        if (localMap.has(id)) { localMap.delete(id); changed = true; }
+        return;
+      }
+
       if (local && local.synced === false) {
         // Локальная запись ещё не отправлена/подтверждена — не трогаем.
         return;
@@ -305,6 +310,15 @@ const StorageManager = (() => {
       localMap.set(id, { ...serverCat, id, synced: true });
       changed = true;
     });
+
+    // Evict locally soft-deleted categories that have been confirmed synced —
+    // the server will no longer include them in its response, so they are done.
+    for (const [id, local] of localMap) {
+      if (local.is_deleted === true && local.synced === true) {
+        localMap.delete(id);
+        changed = true;
+      }
+    }
 
     _userCategories = Array.from(localMap.values());
 
@@ -324,7 +338,7 @@ const StorageManager = (() => {
    * @returns {Object[]}
    */
   function getUnsyncedCategories() {
-    return _userCategories.filter(c => !c.synced);
+    return _userCategories.filter(c => !c.synced || c.is_deleted === true);
   }
 
   /**

@@ -26,7 +26,17 @@ const SyncRunner = (() => {
         'Content-Type':  'application/json',
         'Authorization': `Telegram ${initData}`,
       },
-      body: JSON.stringify({ transactions: pending, categories: pendingCats }),
+      body: JSON.stringify({
+        transactions: pending,
+        categories: pendingCats.map(c => ({
+          id:         c.id,
+          name:       c.name,
+          color:      c.color,
+          icon:       c.icon,
+          sort_order: c.sort_order,
+          is_deleted: c.is_deleted === true,
+        })),
+      }),
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
