@@ -1599,6 +1599,13 @@ input[type="range"]::-moz-range-thumb {
   transform: scale(1.12);
 }
 
+.cat-color-swatch.disabled {
+  opacity: 0.2;
+  pointer-events: none;
+  cursor: not-allowed;
+  border: 1px dashed var(--hint-color);
+}
+
 .cat-sheet-confirm {
   margin: 0 16px;
   width: calc(100% - 32px);

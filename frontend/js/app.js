@@ -9,21 +9,21 @@
 ═══════════════════════════════════════════════════ */
 
 // Блокируем pinch-to-zoom: срабатывает при касании двумя и более пальцами
-document.addEventListener('touchstart', function(e) {
+document.addEventListener('touchstart', function (e) {
   if (e.touches.length > 1) {
     e.preventDefault();
   }
 }, { passive: false });
 
 // Блокируем gesture-based zoom в Safari/iOS WebKit (gesturestart — проприетарное событие)
-document.addEventListener('gesturestart', function(e) {
+document.addEventListener('gesturestart', function (e) {
   e.preventDefault();
 }, { passive: false });
 
 // Блокируем double-tap zoom: два касания с интервалом менее 300ms
-(function() {
+(function () {
   var lastTapTime = 0;
-  document.addEventListener('touchend', function(e) {
+  document.addEventListener('touchend', function (e) {
     var now = Date.now();
     if (now - lastTapTime < 300) {
       e.preventDefault();
@@ -87,11 +87,11 @@ function applyTheme(params) {
   const p = params || {};
 
   // Основные переменные из спеки 4.1
-  if (p.bg_color)           root.style.setProperty('--bg-color',            p.bg_color);
-  if (p.secondary_bg_color) root.style.setProperty('--secondary-bg-color',  p.secondary_bg_color);
-  if (p.text_color)         root.style.setProperty('--text-color',           p.text_color);
-  if (p.hint_color)         root.style.setProperty('--hint-color',           p.hint_color);
-  if (p.button_color)       root.style.setProperty('--accent-color',         p.button_color);
+  if (p.bg_color) root.style.setProperty('--bg-color', p.bg_color);
+  if (p.secondary_bg_color) root.style.setProperty('--secondary-bg-color', p.secondary_bg_color);
+  if (p.text_color) root.style.setProperty('--text-color', p.text_color);
+  if (p.hint_color) root.style.setProperty('--hint-color', p.hint_color);
+  if (p.button_color) root.style.setProperty('--accent-color', p.button_color);
 
   // Цвет статус-бара самого Telegram
   if (tg?.setHeaderColor && p.bg_color) {
@@ -117,9 +117,9 @@ function initTheme() {
 
 const Router = (() => {
   const screens = {
-    home:      document.getElementById('screen-home'),
+    home: document.getElementById('screen-home'),
     analytics: document.getElementById('screen-analytics'),
-    settings:  document.getElementById('screen-settings'),
+    settings: document.getElementById('screen-settings'),
   };
 
   const tabs = document.querySelectorAll('.nav-tab');
@@ -180,9 +180,9 @@ const Router = (() => {
 ═══════════════════════════════════════════════════ */
 
 const NumPad = (() => {
-  const MAX_DIGITS    = 6;   // 999999 — шесть цифр до запятой
-  const MAX_DECIMALS  = 2;
-  const MAX_AMOUNT    = 999999;
+  const MAX_DIGITS = 6;   // 999999 — шесть цифр до запятой
+  const MAX_DECIMALS = 2;
+  const MAX_AMOUNT = 999999;
 
   function init() {
     const numpad = document.querySelector('.numpad');
@@ -241,24 +241,24 @@ const NumPad = (() => {
 const CategoryCreationSheet = (() => {
   const EMOJIS = [
     // Finance
-    '💰','💳','🏦','💸','🪙','📈',
+    '💰', '💳', '🏦',
     // Transport
-    '🚇','🚗','✈️','🛵','🚌','⛽','🚕','🚬',
+    '🚇', '🚗', '✈️', '🛵', '🚌', '⛽', '🚕', '🚬',
     // Leisure
-    '🎮','🎨','🎬','⚽','🎸','📚',
+    '🎮', '🎬', '⚽', '🎸', '📚',
     // Health
-    '💊','🏋️','🧘','🍎',
+    '💊', '🏋️', '🍎',
     // Utilities & Home
-    '🏠','💡','🛒','☕',
+    '🏠', '💡', '🛒', '☕',
     // Food & Shopping
-    '🍺','🛍️','💅','📦','🍜','🐶','🍽️',
+    '🍺', '🛍️', '💅', '📦', '🍜', '🐶', '🍽️',
   ];
   const COLORS = [
-    '#FF6B6B','#FF8E53','#FFD93D','#6BCB77',
-    '#4ECDC4','#45B7D1','#4D96FF','#A29BFE',
-    '#C77DFF','#FF6EB4','#98D8C8','#B5BAD0',
-    '#FFB3BA','#FFDFBA','#FFFFBA','#BAFFC9',
-    '#BAE1FF','#E0BBE4','#D4F1F4','#FFC8DD',
+    '#FF6B6B', '#FF8E53', '#FFD93D', '#6BCB77',
+    '#4ECDC4', '#45B7D1', '#4D96FF', '#A29BFE',
+    '#C77DFF', '#FF6EB4', '#98D8C8', '#B5BAD0',
+    '#FFB3BA', '#FFDFBA', '#FFFFBA', '#BAFFC9',
+    '#BAE1FF', '#E0BBE4', '#D4F1F4', '#FFC8DD',
   ];
 
   let _emoji = EMOJIS[0];
@@ -286,20 +286,42 @@ const CategoryCreationSheet = (() => {
     });
   }
 
-  function _syncColorPalette() {
+  function _getUsedColors() {
+    const editingId = _editMode && _editingCategory ? String(_editingCategory.id) : null;
+    const used = new Set();
+    (Store.state.categories || []).forEach(cat => {
+      if (cat.is_deleted) return;
+      if (editingId !== null && String(cat.id) === editingId) return;
+      used.add(cat.color);
+    });
+    return used;
+  }
+
+  function _renderColorPalette() {
     const palette = document.getElementById('cat-color-palette');
     if (!palette) return;
-    palette.querySelectorAll('.cat-color-swatch').forEach(el => {
-      const sel = el.dataset.color === _color;
-      el.classList.toggle('selected', sel);
-      el.setAttribute('aria-selected', String(sel));
+    const usedColors = _getUsedColors();
+    palette.textContent = '';
+    const frag = document.createDocumentFragment();
+    COLORS.forEach(color => {
+      const isDisabled = usedColors.has(color) && color !== _color;
+      const el = document.createElement('div');
+      el.className = 'cat-color-swatch' + (color === _color ? ' selected' : '') + (isDisabled ? ' disabled' : '');
+      el.dataset.color = color;
+      el.style.background = color;
+      el.setAttribute('role', 'option');
+      el.setAttribute('aria-label', color);
+      el.setAttribute('aria-selected', String(color === _color));
+      if (isDisabled) el.setAttribute('aria-disabled', 'true');
+      frag.appendChild(el);
     });
+    palette.appendChild(frag);
   }
 
   function open(categoryObj) {
     _editMode = !!categoryObj;
     _editingCategory = categoryObj || null;
-    _emoji = categoryObj ? categoryObj.icon  : EMOJIS[0];
+    _emoji = categoryObj ? categoryObj.icon : EMOJIS[0];
     _color = categoryObj ? categoryObj.color : COLORS[0];
 
     const nameInput = document.getElementById('cat-sheet-name');
@@ -316,7 +338,7 @@ const CategoryCreationSheet = (() => {
 
     _updatePreview();
     _syncEmojiGrid();
-    _syncColorPalette();
+    _renderColorPalette();
     requestAnimationFrame(() => {
       sheet.classList.add('active');
       sheet.removeAttribute('aria-hidden');
@@ -352,11 +374,11 @@ const CategoryCreationSheet = (() => {
     }
 
     const cat = {
-      id:        self.crypto.randomUUID(),
-      user_id:   null,
+      id: self.crypto.randomUUID(),
+      user_id: null,
       name,
-      icon:      _emoji,
-      color:     _color,
+      icon: _emoji,
+      color: _color,
       is_system: false,
       sort_order: 999,
     };
@@ -419,27 +441,16 @@ const CategoryCreationSheet = (() => {
     // Build color palette via createElement (XSS-safe; values are hardcoded)
     const palette = document.getElementById('cat-color-palette');
     if (palette) {
-      const frag = document.createDocumentFragment();
-      COLORS.forEach(color => {
-        const el = document.createElement('div');
-        el.className = 'cat-color-swatch' + (color === _color ? ' selected' : '');
-        el.dataset.color = color;
-        el.style.background = color;
-        el.setAttribute('role', 'option');
-        el.setAttribute('aria-label', color);
-        el.setAttribute('aria-selected', String(color === _color));
-        frag.appendChild(el);
-      });
-      palette.appendChild(frag);
+      _renderColorPalette();
 
       palette.addEventListener('pointerdown', (e) => {
         const swatch = e.target.closest('.cat-color-swatch');
-        if (!swatch) return;
+        if (!swatch || swatch.classList.contains('disabled')) return;
         e.preventDefault();
         tg?.HapticFeedback?.impactOccurred('light');
         _color = swatch.dataset.color;
         _updatePreview();
-        _syncColorPalette();
+        _renderColorPalette();
       });
     }
   }
@@ -642,13 +653,13 @@ const BudgetCard = (() => {
 
   function _computeAvailable(period) {
     const limit = period === 'week'
-      ? (Store.state.weeklyLimit  || 0)
+      ? (Store.state.weeklyLimit || 0)
       : (Store.state.monthlyLimit || 0);
     if (!limit) return null;
 
-    const txs    = Store.state.transactions || [];
-    const now    = new Date();
-    const rates  = Store.state.rates || {};
+    const txs = Store.state.transactions || [];
+    const now = new Date();
+    const rates = Store.state.rates || {};
     const appCur = (Store.state.currency || 'RUB').toUpperCase();
 
     let start;
@@ -674,11 +685,11 @@ const BudgetCard = (() => {
   }
 
   function _render() {
-    const el    = document.getElementById('budget-available');
+    const el = document.getElementById('budget-available');
     if (!el) return;
 
     const limit = _period === 'week'
-      ? (Store.state.weeklyLimit  || 0)
+      ? (Store.state.weeklyLimit || 0)
       : (Store.state.monthlyLimit || 0);
     const val = _computeAvailable(_period);
 
@@ -692,8 +703,8 @@ const BudgetCard = (() => {
     el.className = 'budget-amount';
     if (limit > 0) {
       const ratio = val / limit;
-      if      (ratio <= 0)   el.classList.add('danger');
-      else if (ratio < 0.3)  el.classList.add('warning');
+      if (ratio <= 0) el.classList.add('danger');
+      else if (ratio < 0.3) el.classList.add('warning');
     }
   }
 
@@ -715,11 +726,11 @@ const BudgetCard = (() => {
       });
     }
 
-    Store.subscribe('weeklyLimit',  _render);
+    Store.subscribe('weeklyLimit', _render);
     Store.subscribe('monthlyLimit', _render);
     Store.subscribe('transactions', _render);
-    Store.subscribe('currency',     _render);
-    Store.subscribe('rates',        _render);
+    Store.subscribe('currency', _render);
+    Store.subscribe('rates', _render);
   }
 
   return { init };
@@ -730,8 +741,8 @@ const BudgetCard = (() => {
 ═══════════════════════════════════════════════════ */
 
 function initBindings() {
-  const amountDisplay  = document.getElementById('amount-display');
-  const btnAdd         = document.getElementById('btn-add');
+  const amountDisplay = document.getElementById('amount-display');
+  const btnAdd = document.getElementById('btn-add');
   const currencySymbol = document.getElementById('currency-symbol');
 
   // Дисплей суммы
@@ -757,7 +768,7 @@ function initBindings() {
   function updateAddButton() {
     if (!btnAdd) return;
     const amount = parseFloat(Store.state.inputAmount);
-    const cat    = Store.state.selectedCategory;
+    const cat = Store.state.selectedCategory;
     btnAdd.disabled = !(cat && amount > 0);
   }
 
@@ -780,18 +791,18 @@ function initBindings() {
 
 function handleAddTransaction() {
   const amount = parseFloat(Store.state.inputAmount);
-  const catId  = Store.state.selectedCategory;
+  const catId = Store.state.selectedCategory;
   if (!amount || !catId) return;
 
   // Сохраняем локально — StorageManager сам обновит Store (оптимистичный апдейт)
   const tx = StorageManager.saveTransactionLocally({
     category_id: catId,
     amount,
-    created_at:  new Date().toISOString(),
+    created_at: new Date().toISOString(),
   });
 
   // Сбрасываем ввод
-  Store.state.inputAmount      = '';
+  Store.state.inputAmount = '';
   Store.state.selectedCategory = null;
 
   // Сбрасываем выделение категории в DOM
@@ -822,12 +833,12 @@ function updateAnalyticsRange() {
 
   if (period === 'day') {
     start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   } else {
     // 'month' и fallback
     start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     // day=0 следующего месяца → последний день текущего
-    end   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
   }
 
   Store.state.analyticsRange = { start: start.getTime(), end: end.getTime() };
@@ -845,7 +856,7 @@ function computeLocalDonutData() {
   });
 
   const appCur = (Store.state.currency || 'RUB').toUpperCase();
-  const rates  = Store.state.rates || {};
+  const rates = Store.state.rates || {};
 
   const groups = {};
   filteredTxs.forEach(tx => {
@@ -873,9 +884,9 @@ function loadAnalyticsData() {
   const localDonut = computeLocalDonutData();
   const enriched = localDonut.map(item => ({
     ...item,
-    name:  catMap[item.category_id]?.name  || item.category_id,
+    name: catMap[item.category_id]?.name || item.category_id,
     color: catMap[item.category_id]?.color || '#888888',
-    icon:  catMap[item.category_id]?.icon  || '💰',
+    icon: catMap[item.category_id]?.icon || '💰',
   }));
 
   Store.state.analyticsDonut = enriched;
@@ -895,40 +906,40 @@ function renderTimelineFromStore() {
 ═══════════════════════════════════════════════════ */
 
 const CalendarSheet = (() => {
-  const MONTHS_RU   = ['Январь','Февраль','Март','Апрель','Май','Июнь',
-                        'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-  const WEEKDAYS_RU = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+  const WEEKDAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
   let currentTarget = null;  // 'start' | 'end'
-  let viewYear  = 0;
+  let viewYear = 0;
   let viewMonth = 0;
 
-  const sheet      = document.getElementById('calendar-sheet');
-  const grid       = document.getElementById('calendar-grid');
+  const sheet = document.getElementById('calendar-sheet');
+  const grid = document.getElementById('calendar-grid');
   const monthLabel = document.getElementById('calendar-month-label');
   const startLabel = document.getElementById('calendar-start-label');
-  const endLabel   = document.getElementById('calendar-end-label');
+  const endLabel = document.getElementById('calendar-end-label');
 
   function fmtLabel(ts) {
     const d = new Date(ts);
     return String(d.getDate()).padStart(2, '0') + '.' +
-           String(d.getMonth() + 1).padStart(2, '0') + '.' +
-           d.getFullYear();
+      String(d.getMonth() + 1).padStart(2, '0') + '.' +
+      d.getFullYear();
   }
 
   function syncLabels() {
     const range = Store.state.analyticsRange;
     if (!range) return;
     if (startLabel && range.start) startLabel.textContent = fmtLabel(range.start);
-    if (endLabel   && range.end)   endLabel.textContent   = fmtLabel(range.end);
+    if (endLabel && range.end) endLabel.textContent = fmtLabel(range.end);
   }
 
   function open(target) {
     currentTarget = target;
     const range = Store.state.analyticsRange || {};
     const refTs = target === 'start' ? range.start : range.end;
-    const ref   = refTs ? new Date(refTs) : new Date();
-    viewYear  = ref.getFullYear();
+    const ref = refTs ? new Date(refTs) : new Date();
+    viewYear = ref.getFullYear();
     viewMonth = ref.getMonth();
     renderGrid();
     sheet.classList.add('active');
@@ -944,18 +955,18 @@ const CalendarSheet = (() => {
     monthLabel.textContent = MONTHS_RU[viewMonth] + ' ' + viewYear;
     grid.textContent = '';
 
-    const today     = new Date();
+    const today = new Date();
     const todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const range     = Store.state.analyticsRange || {};
+    const range = Store.state.analyticsRange || {};
 
     function normDay(ts) {
       const d = new Date(ts);
       return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     }
     const rsNorm = range.start ? normDay(range.start) : null;
-    const reNorm = range.end   ? normDay(range.end)   : null;
+    const reNorm = range.end ? normDay(range.end) : null;
 
-    const firstDow   = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
+    const firstDow = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
     const startOffset = (firstDow + 6) % 7;                       // Mon=0
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
@@ -968,7 +979,7 @@ const CalendarSheet = (() => {
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
-      const btn     = document.createElement('div');
+      const btn = document.createElement('div');
       btn.className = 'calendar-day';
       btn.dataset.day = day;
       btn.appendChild(document.createTextNode(String(day)));
@@ -978,9 +989,9 @@ const CalendarSheet = (() => {
       if (dayNorm === todayNorm) btn.classList.add('today');
 
       if (rsNorm !== null && reNorm !== null) {
-        if      (dayNorm === rsNorm)                          btn.classList.add('range-start');
-        else if (dayNorm === reNorm)                          btn.classList.add('range-end');
-        else if (dayNorm > rsNorm && dayNorm < reNorm)        btn.classList.add('in-range');
+        if (dayNorm === rsNorm) btn.classList.add('range-start');
+        else if (dayNorm === reNorm) btn.classList.add('range-end');
+        else if (dayNorm > rsNorm && dayNorm < reNorm) btn.classList.add('in-range');
       } else if (rsNorm !== null && dayNorm === rsNorm) {
         btn.classList.add('range-start');
       } else if (reNorm !== null && dayNorm === reNorm) {
@@ -994,13 +1005,13 @@ const CalendarSheet = (() => {
   }
 
   function handleDayTap(day) {
-    const dayStart  = new Date(viewYear, viewMonth, day).getTime();
-    const dayEnd    = new Date(viewYear, viewMonth, day, 23, 59, 59, 999).getTime();
+    const dayStart = new Date(viewYear, viewMonth, day).getTime();
+    const dayEnd = new Date(viewYear, viewMonth, day, 23, 59, 59, 999).getTime();
     const labelText = String(day).padStart(2, '0') + '.' +
-                      String(viewMonth + 1).padStart(2, '0') + '.' + viewYear;
+      String(viewMonth + 1).padStart(2, '0') + '.' + viewYear;
     const prev = Store.state.analyticsRange || {};
     let newStart = prev.start ?? dayStart;
-    let newEnd   = prev.end   ?? dayEnd;
+    let newEnd = prev.end ?? dayEnd;
 
     if (currentTarget === 'start') {
       newStart = dayStart;
@@ -1018,7 +1029,7 @@ const CalendarSheet = (() => {
       }
     }
 
-    Store.state.analyticsRange  = { start: newStart, end: newEnd };
+    Store.state.analyticsRange = { start: newStart, end: newEnd };
     Store.state.analyticsPeriod = 'custom';
     if (Store.state.currentTab === 'analytics') loadAnalyticsData();
     close();
@@ -1069,16 +1080,16 @@ const CalendarSheet = (() => {
 
     // Trigger buttons
     const startTrigger = document.getElementById('calendar-start-trigger');
-    const endTrigger   = document.getElementById('calendar-end-trigger');
+    const endTrigger = document.getElementById('calendar-end-trigger');
     if (startTrigger) startTrigger.addEventListener('pointerdown', (e) => { e.preventDefault(); open('start'); });
-    if (endTrigger)   endTrigger.addEventListener('pointerdown',   (e) => { e.preventDefault(); open('end'); });
+    if (endTrigger) endTrigger.addEventListener('pointerdown', (e) => { e.preventDefault(); open('end'); });
   }
 
   return { init, open, close, syncLabels };
 })();
 
 function initPeriodSwitcher() {
-  const switcher   = document.querySelector('.analytics-period-switcher');
+  const switcher = document.querySelector('.analytics-period-switcher');
   const datePicker = document.getElementById('custom-date-picker');
   if (!switcher) return;
 
@@ -1102,7 +1113,7 @@ function initPeriodSwitcher() {
       if (!Store.state.analyticsRange?.start) {
         Store.state.analyticsRange = {
           start: new Date(now.getFullYear(), now.getMonth(), 1).getTime(),
-          end:   new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime(),
+          end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime(),
         };
       }
       CalendarSheet.syncLabels();
@@ -1162,8 +1173,8 @@ function initAnalytics() {
 
       StorageManager.saveTransactionLocally({
         category_id: tx.category_id,
-        amount:      Number(targetAmount.toFixed(2)),
-        created_at:  new Date().toISOString(),
+        amount: Number(targetAmount.toFixed(2)),
+        created_at: new Date().toISOString(),
       });
       SyncRunner.syncWithBackend();
       // renderTimelineFromStore() will fire automatically via the transactions subscriber
@@ -1176,7 +1187,7 @@ function initAnalytics() {
 ═══════════════════════════════════════════════════ */
 
 function initNetworkWatcher() {
-  window.addEventListener('online',  () => { Store.state.isOnline = true; });
+  window.addEventListener('online', () => { Store.state.isOnline = true; });
   window.addEventListener('offline', () => { Store.state.isOnline = false; });
 }
 
@@ -1197,16 +1208,16 @@ async function bootstrap() {
 
     if (!res.ok) throw new Error(`bootstrap: ${res.status}`);
 
-    const data   = await res.json();
+    const data = await res.json();
     const budget = data.budget || {};
 
     Store.batchUpdate({
-      currency:     data.currency        || 'RUB',
-      weeklyLimit:  budget.weekly_limit  || 0,
+      currency: data.currency || 'RUB',
+      weeklyLimit: budget.weekly_limit || 0,
       monthlyLimit: budget.monthly_limit || 0,
       // Merge server categories into local storage, deduped strictly by UUID
-      categories:   StorageManager.mergeCategoriesFromServer(data.categories || []),
-      rates:        data.rates           || {},
+      categories: StorageManager.mergeCategoriesFromServer(data.categories || []),
+      rates: data.rates || {},
     });
 
   } catch (err) {
@@ -1266,7 +1277,7 @@ function formatCurrency(amount, currencyOrCode = 'RUB') {
 
 function hideSkeleton() {
   const skeleton = document.getElementById('skeleton');
-  const app      = document.getElementById('app');
+  const app = document.getElementById('app');
 
   if (skeleton) {
     skeleton.classList.add('fade-out');
