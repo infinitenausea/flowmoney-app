@@ -1233,6 +1233,11 @@ async function bootstrap() {
       CategoryCarousel.render(mergedCategories);
     }
 
+    // Refresh analytics timeline if currently viewing that tab
+    if (Store.state.currentTab === 'analytics') {
+      loadAnalyticsData();
+    }
+
     // DEBUG: phantom categories probe — moved here to show post-merge state
     (function() {
       const serverCount = (data.categories || []).length;
