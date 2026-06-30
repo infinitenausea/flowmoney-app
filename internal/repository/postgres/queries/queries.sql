@@ -26,7 +26,7 @@ WHERE user_id   = $1
 GROUP BY category_id;
 
 -- name: GetTimelineWithCursor :many
-SELECT id, user_id, category_id, amount, created_at, is_deleted
+SELECT id, user_id, category_id, amount, created_at, is_deleted, updated_at
 FROM transactions
 WHERE user_id   = $1
   AND is_deleted = false
@@ -40,7 +40,14 @@ VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO UPDATE
 SET category_id = EXCLUDED.category_id,
     amount      = EXCLUDED.amount,
-    is_deleted  = EXCLUDED.is_deleted;
+    is_deleted  = EXCLUDED.is_deleted,
+    updated_at  = NOW();
+
+-- name: GetTransactionsDelta :many
+SELECT id, category_id, amount, created_at, is_deleted, updated_at
+FROM transactions
+WHERE user_id = $1 AND updated_at > $2
+ORDER BY updated_at ASC;
 
 -- name: UpdateUserCurrency :exec
 UPDATE users SET currency = $2, updated_at = NOW() WHERE tg_id = $1;

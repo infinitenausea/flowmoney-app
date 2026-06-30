@@ -7,6 +7,7 @@
  */
 
 const STORAGE_KEY = 'flowmoney_transactions';
+const LAST_SYNCED_AT_KEY = 'flowmoney_last_synced_at';
 
 // One-time migration: converts legacy string category IDs (used before UUID system categories
 // were introduced) to the stable UUIDs defined in migration 000002_seed_system_categories.
@@ -29,6 +30,14 @@ const StorageManager = (() => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(_transactions));
     } catch (e) {
       console.warn('[Storage] Failed to persist:', e.message);
+    }
+  }
+
+  function _persistLastSyncedAt(ts) {
+    try {
+      localStorage.setItem(LAST_SYNCED_AT_KEY, ts);
+    } catch (e) {
+      console.warn('[Storage] Failed to persist last_synced_at:', e.message);
     }
   }
 
@@ -147,10 +156,12 @@ const StorageManager = (() => {
   }
 
   /**
-   * Мержит транзакции с сервера в локальное хранилище без затирания данных.
+   * Мержит транзакции с сервера (дельта или полный список) в локальное хранилище.
+   * — Транзакции с is_deleted: true удаляются из локального массива.
    * — Новые записи (нет в localStorage) добавляются.
    * — Существующие не-pending записи обновляются до серверной версии.
    * — Записи с _pending: true не трогаются (оптимистичный апдейт в полёте).
+   * — last_synced_at обновляется самым свежим updated_at из пришедших записей.
    * @param {Object[]} items — транзакции из API
    */
   function mergeFromServer(items) {
@@ -158,8 +169,25 @@ const StorageManager = (() => {
 
     const localMap = new Map(_transactions.map(tx => [tx.id, tx]));
     let changed = false;
+    let latestUpdatedAt = null;
 
     items.forEach(serverTx => {
+      // Отслеживаем самый свежий updated_at для last_synced_at
+      if (serverTx.updated_at) {
+        if (!latestUpdatedAt || serverTx.updated_at > latestUpdatedAt) {
+          latestUpdatedAt = serverTx.updated_at;
+        }
+      }
+
+      if (serverTx.is_deleted) {
+        // Удаляем запись, о которой сервер сообщил как об удалённой
+        if (localMap.has(serverTx.id)) {
+          localMap.delete(serverTx.id);
+          changed = true;
+        }
+        return;
+      }
+
       const local = localMap.get(serverTx.id);
       if (!local) {
         localMap.set(serverTx.id, { ...serverTx, synced: true, _pending: false });
@@ -171,11 +199,23 @@ const StorageManager = (() => {
       // local._pending === true: запись ждёт отправки — сервер не перезаписывает
     });
 
+    if (latestUpdatedAt) {
+      _persistLastSyncedAt(latestUpdatedAt);
+    }
+
     if (changed) {
       _transactions = Array.from(localMap.values());
       _persist();
       Store.state.transactions = [..._transactions];
     }
+  }
+
+  /**
+   * Возвращает метку времени последней успешной синхронизации (RFC3339) или null.
+   * @returns {string|null}
+   */
+  function getLastSyncedAt() {
+    return localStorage.getItem(LAST_SYNCED_AT_KEY) || null;
   }
 
   /**
@@ -185,7 +225,7 @@ const StorageManager = (() => {
     return JSON.parse(JSON.stringify(_transactions));
   }
 
-  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, _dump };
+  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, _dump };
 })();
 
 window.StorageManager = StorageManager;

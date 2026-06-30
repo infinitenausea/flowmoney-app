@@ -39,7 +39,12 @@ const SyncRunner = (() => {
    * Это позволяет десктопному клиенту видеть транзакции, добавленные с мобильного.
    */
   async function _pull(initData) {
-    const res = await fetch('/api/v1/analytics/timeline?limit=200', {
+    const since = StorageManager.getLastSyncedAt();
+    const url = since
+      ? `/api/v1/analytics/timeline?since=${encodeURIComponent(since)}`
+      : '/api/v1/analytics/timeline?limit=200';
+
+    const res = await fetch(url, {
       headers: { 'Authorization': `Telegram ${initData}` },
     });
     if (!res.ok) return;
@@ -47,7 +52,7 @@ const SyncRunner = (() => {
     const data = await res.json();
     if (data?.items?.length) {
       StorageManager.mergeFromServer(data.items);
-      console.info('[Sync] Pulled', data.items.length, 'transaction(s)');
+      console.info('[Sync] Pulled', data.items.length, 'transaction(s)', since ? '(delta)' : '(full)');
     }
   }
 

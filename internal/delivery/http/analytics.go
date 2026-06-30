@@ -29,6 +29,19 @@ type timelineResponse struct {
 	NextCursor *string        `json:"next_cursor"`
 }
 
+type deltaItem struct {
+	ID         string    `json:"id"`
+	CategoryID string    `json:"category_id"`
+	Amount     float64   `json:"amount"`
+	CreatedAt  time.Time `json:"created_at"`
+	IsDeleted  bool      `json:"is_deleted"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type deltaResponse struct {
+	Items []deltaItem `json:"items"`
+}
+
 func NewGetAnalyticsDonutHandler(q repository.Querier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tgID, ok := GetTelegramID(r.Context())
@@ -64,6 +77,41 @@ func NewGetTimelineHandler(q repository.Querier) http.HandlerFunc {
 			return
 		}
 
+		// Delta sync: ?since=<RFC3339> returns only changed records including deletions.
+		if raw := r.URL.Query().Get("since"); raw != "" {
+			t, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				http.Error(w, "bad request: since must be RFC3339", http.StatusBadRequest)
+				return
+			}
+
+			rows, err := q.GetTransactionsDelta(r.Context(), repository.GetTransactionsDeltaParams{
+				UserID:    tgID,
+				UpdatedAt: pgtype.Timestamptz{Time: t, Valid: true},
+			})
+			if err != nil {
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+
+			items := make([]deltaItem, 0, len(rows))
+			for _, row := range rows {
+				items = append(items, deltaItem{
+					ID:         uuidToString(row.ID),
+					CategoryID: uuidToString(row.CategoryID),
+					Amount:     numericToFloat64(row.Amount),
+					CreatedAt:  row.CreatedAt.Time,
+					IsDeleted:  row.IsDeleted,
+					UpdatedAt:  row.UpdatedAt.Time,
+				})
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(deltaResponse{Items: items})
+			return
+		}
+
+		// Standard cursor-based timeline (initial load, no deletions included).
 		var cursor pgtype.Timestamptz
 		if raw := r.URL.Query().Get("cursor"); raw != "" {
 			t, err := time.Parse(time.RFC3339, raw)
@@ -85,9 +133,9 @@ func NewGetTimelineHandler(q repository.Querier) http.HandlerFunc {
 		}
 
 		rows, err := q.GetTimelineWithCursor(r.Context(), repository.GetTimelineWithCursorParams{
-			UserID: tgID,
-			Cursor: cursor,
-			Limit:  limit,
+			UserID:  tgID,
+			Column2: cursor,
+			Limit:   limit,
 		})
 		if err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
