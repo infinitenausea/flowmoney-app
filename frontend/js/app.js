@@ -396,19 +396,6 @@ const CategoryCreationSheet = (() => {
 ═══════════════════════════════════════════════════ */
 
 const CategoryCarousel = (() => {
-  // Дефолтные категории — UUIDs совпадают с системными категориями в DB
-  // (миграция 000002_seed_system_categories), поэтому транзакции,
-  // созданные в офлайн-режиме, успешно синхронизируются при появлении сети.
-  const DEFAULT_CATEGORIES = [
-    { id: '11111111-1111-1111-1111-111111111101', name: 'Еда',       icon: '🍕', color: '#FF6B6B' },
-    { id: '11111111-1111-1111-1111-111111111102', name: 'Транспорт', icon: '🚇', color: '#4ECDC4' },
-    { id: '11111111-1111-1111-1111-111111111103', name: 'Покупки',   icon: '🛍️',  color: '#45B7D1' },
-    { id: '11111111-1111-1111-1111-111111111104', name: 'Здоровье',  icon: '💊', color: '#96CEB4' },
-    { id: '11111111-1111-1111-1111-111111111105', name: 'Кафе',      icon: '☕', color: '#FFEAA7' },
-    { id: '11111111-1111-1111-1111-111111111106', name: 'Спорт',     icon: '⚽', color: '#DDA0DD' },
-    { id: '11111111-1111-1111-1111-111111111107', name: 'Дом',       icon: '🏠', color: '#98D8C8' },
-    { id: '11111111-1111-1111-1111-111111111108', name: 'Другое',    icon: '💡', color: '#B0C4DE' },
-  ];
 
   function render(categories) {
     const carousel = document.getElementById('category-carousel');
@@ -467,8 +454,8 @@ const CategoryCarousel = (() => {
   }
 
   function init() {
-    // Render immediately with defaults + any user categories already in localStorage
-    render([...DEFAULT_CATEGORIES, ...StorageManager.getUserCategories()]);
+    // Render immediately from user categories in localStorage (seeded on first run)
+    render(StorageManager.getUserCategories());
 
     // Single delegated listener — covers both category items and the "+" button.
     // Added once in init() so re-renders (render()) never stack up listeners.

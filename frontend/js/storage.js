@@ -10,18 +10,6 @@ const STORAGE_KEY = 'flowmoney_transactions';
 const LAST_SYNCED_AT_KEY = 'flowmoney_last_synced_at';
 const CATEGORIES_KEY = 'flowmoney_user_categories';
 
-// One-time migration: converts legacy string category IDs (used before UUID system categories
-// were introduced) to the stable UUIDs defined in migration 000002_seed_system_categories.
-const LEGACY_CATEGORY_ID_MAP = {
-  'food':      '11111111-1111-1111-1111-111111111101',
-  'transport': '11111111-1111-1111-1111-111111111102',
-  'shopping':  '11111111-1111-1111-1111-111111111103',
-  'health':    '11111111-1111-1111-1111-111111111104',
-  'cafe':      '11111111-1111-1111-1111-111111111105',
-  'sport':     '11111111-1111-1111-1111-111111111106',
-  'home':      '11111111-1111-1111-1111-111111111107',
-  'other':     '11111111-1111-1111-1111-111111111108',
-};
 
 const StorageManager = (() => {
   let _transactions = [];
@@ -56,21 +44,6 @@ const StorageManager = (() => {
       _transactions = [];
     }
 
-    // Migrate legacy string category IDs to stable UUIDs (one-time, in-place).
-    let migrated = false;
-    _transactions = _transactions.map(tx => {
-      const newCatId = LEGACY_CATEGORY_ID_MAP[tx.category_id];
-      if (newCatId) {
-        migrated = true;
-        return { ...tx, category_id: newCatId, synced: false, _pending: true };
-      }
-      return tx;
-    });
-    if (migrated) {
-      _persist();
-      console.info('[Storage] Migrated legacy category IDs to UUIDs');
-    }
-
     Store.state.transactions = [..._transactions];
     console.info('[Storage] Loaded', _transactions.length, 'transaction(s) from localStorage');
 
@@ -81,6 +54,21 @@ const StorageManager = (() => {
     } catch (e) {
       console.warn('[Storage] Corrupt user categories, resetting:', e.message);
       _userCategories = [];
+    }
+
+    // First run: seed three default categories so the carousel is never empty.
+    if (_userCategories.length === 0) {
+      _userCategories = [
+        { id: self.crypto.randomUUID(), name: 'Продукты',  icon: '🛒', color: '#4ECDC4', sort_order: 0, synced: false },
+        { id: self.crypto.randomUUID(), name: 'Транспорт', icon: '🚗', color: '#45B7D1', sort_order: 1, synced: false },
+        { id: self.crypto.randomUUID(), name: 'Кафе',      icon: '☕', color: '#FFB347', sort_order: 2, synced: false },
+      ];
+      try {
+        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
+      } catch (e) {
+        console.warn('[Storage] Failed to seed default categories:', e.message);
+      }
+      console.info('[Storage] Seeded 3 default categories (first run)');
     }
   }
 

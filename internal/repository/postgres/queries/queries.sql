@@ -13,7 +13,7 @@ WHERE user_id = $1;
 -- name: GetCategoriesByUserId :many
 SELECT id, user_id, name, color, icon, is_system, sort_order
 FROM categories
-WHERE user_id = $1 OR is_system = true
+WHERE user_id = $1
 ORDER BY sort_order ASC;
 
 -- name: GetAnalyticsDonut :many
@@ -61,12 +61,11 @@ SET weekly_limit  = EXCLUDED.weekly_limit,
     monthly_limit = EXCLUDED.monthly_limit;
 
 -- name: UpsertCategory :exec
-INSERT INTO categories (id, user_id, name, color, icon, is_system, sort_order)
-VALUES ($1, $2, $3, $4, $5, false, $6)
+INSERT INTO categories (id, user_id, name, color, icon, sort_order)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO UPDATE
 SET name       = EXCLUDED.name,
     color      = EXCLUDED.color,
     icon       = EXCLUDED.icon,
     sort_order = EXCLUDED.sort_order
-WHERE categories.is_system = false
-  AND categories.user_id   = EXCLUDED.user_id;
+WHERE categories.user_id = EXCLUDED.user_id;
