@@ -70,15 +70,11 @@ const SyncRunner = (() => {
       fetch('/api/v1/bootstrap', { headers }),
     ]);
 
-    let categoriesUpdated = false;
-
     if (bootstrapRes.ok) {
       const bData = await bootstrapRes.json();
       const serverCats = bData.categories || [];
       if (serverCats.length) {
-        const merged = StorageManager.mergeCategoriesFromServer(serverCats, false);
-        Store.state.categories = merged;
-        categoriesUpdated = true;
+        StorageManager.mergeCategoriesFromServer(serverCats, false);
         console.info('[Sync] Pulled', serverCats.length, 'category(ies)');
       }
     }
@@ -89,13 +85,6 @@ const SyncRunner = (() => {
     if (data?.items?.length) {
       StorageManager.mergeFromServer(data.items);
       console.info('[Sync] Pulled', data.items.length, 'transaction(s)');
-    }
-
-    // When categories changed but no new transactions arrived, the timeline
-    // still holds stale category lookups — force a re-render by nudging the
-    // transactions key, which fires the Store subscriber that calls loadAnalyticsData().
-    if (categoriesUpdated && !data?.items?.length) {
-      Store.state.transactions = [...(Store.state.transactions || [])];
     }
   }
 

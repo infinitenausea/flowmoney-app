@@ -334,7 +334,10 @@ const StorageManager = (() => {
       }
     }
 
-    return getUserCategories();
+    const result = getUserCategories();
+    Store.state.categories = result;
+    Store.state.transactions = [...(Store.state.transactions || [])];
+    return result;
   }
 
   /**
@@ -356,12 +359,20 @@ const StorageManager = (() => {
       if (idSet.has(c.id)) { changed = true; return { ...c, synced: true }; }
       return c;
     });
+
+    // Evict soft-deleted entries now confirmed on the server — remove from runtime and Store.
+    const prevLen = _userCategories.length;
+    _userCategories = _userCategories.filter(c => c.is_deleted !== true);
+    if (_userCategories.length !== prevLen) changed = true;
+
     if (changed) {
       try {
         localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
       } catch (e) {
         console.warn('[Storage] Failed to persist user categories:', e.message);
       }
+      Store.state.categories = [..._userCategories];
+      Store.state.transactions = [...(Store.state.transactions || [])];
     }
   }
 
