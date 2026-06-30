@@ -527,8 +527,8 @@ const CategoryCarousel = (() => {
   }
 
   function init() {
-    // Render immediately from user categories in localStorage (seeded on first run)
-    render(StorageManager.getUserCategories());
+    // Defer initial render until after bootstrap() completes to avoid rendering stale cached data.
+    // The Store subscriber (below) will handle rendering when categories are updated from the server.
 
     // Single delegated listener — covers both category items and the "+" button.
     // Added once in init() so re-renders (render()) never stack up listeners.
@@ -1234,10 +1234,8 @@ async function bootstrap() {
       rates: data.rates || {},
     });
 
-    // Explicitly render carousel after Store update to ensure atomic UI refresh
-    if (window.CategoryCarousel && typeof window.CategoryCarousel.render === 'function') {
-      CategoryCarousel.render(mergedCategories);
-    }
+    // Explicitly render carousel after Store update with fresh server data to ensure atomic UI refresh
+    CategoryCarousel.render(mergedCategories);
 
     // Refresh analytics timeline if currently viewing that tab
     if (Store.state.currentTab === 'analytics') {
@@ -1336,6 +1334,9 @@ async function init() {
     bootstrap(),
     new Promise(r => setTimeout(r, 400)),
   ]);
+
+  // Ensure carousel renders with final store state after bootstrap completes
+  CategoryCarousel.render(Store.state.categories);
 
   hideSkeleton();
   initialPull();            // скачиваем историю, если localStorage пуст
