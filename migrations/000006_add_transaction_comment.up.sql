@@ -1,0 +1,1 @@
+ALTER TABLE transactions ADD COLUMN comment VARCHAR(255) NOT NULL DEFAULT '';

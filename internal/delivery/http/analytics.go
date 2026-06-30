@@ -24,6 +24,7 @@ type timelineItem struct {
 	CreatedAt  time.Time `json:"created_at"`
 	IsDeleted  bool      `json:"is_deleted"`
 	UpdatedAt  time.Time `json:"updated_at"`
+	Comment    string    `json:"comment"`
 }
 
 type timelineResponse struct {
@@ -39,6 +40,7 @@ type deltaItem struct {
 	CreatedAt  time.Time `json:"created_at"`
 	IsDeleted  bool      `json:"is_deleted"`
 	UpdatedAt  time.Time `json:"updated_at"`
+	Comment    string    `json:"comment"`
 }
 
 type deltaResponse struct {
@@ -107,6 +109,7 @@ func NewGetTimelineHandler(q repository.Querier) http.HandlerFunc {
 					CreatedAt:  row.CreatedAt.Time,
 					IsDeleted:  row.IsDeleted,
 					UpdatedAt:  row.UpdatedAt.Time,
+					Comment:    row.Comment,
 				})
 			}
 
@@ -156,6 +159,7 @@ func NewGetTimelineHandler(q repository.Querier) http.HandlerFunc {
 				CreatedAt:  row.CreatedAt.Time,
 				IsDeleted:  row.IsDeleted,
 				UpdatedAt:  row.UpdatedAt.Time,
+				Comment:    row.Comment,
 			})
 		}
 

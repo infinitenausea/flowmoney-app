@@ -33,6 +33,7 @@ type Transaction struct {
 	IsDeleted  bool               `json:"is_deleted"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 	Currency   string             `json:"currency"`
+	Comment    string             `json:"comment"`
 }
 
 type User struct {

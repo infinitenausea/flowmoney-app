@@ -21,6 +21,7 @@ type syncTransaction struct {
 	CreatedAt  time.Time `json:"created_at"`
 	IsDeleted  bool      `json:"is_deleted"`
 	Currency   string    `json:"currency"`
+	Comment    string    `json:"comment"`
 }
 
 type syncCategory struct {
@@ -114,6 +115,7 @@ func NewSyncHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				CreatedAt:  pgtype.Timestamptz{Time: t.CreatedAt, Valid: true},
 				IsDeleted:  t.IsDeleted,
 				Currency:   currency,
+				Comment:    t.Comment,
 			})
 			if err != nil {
 				log.Printf("SYNC ERROR: upsert tx %s: %v", t.ID, err)

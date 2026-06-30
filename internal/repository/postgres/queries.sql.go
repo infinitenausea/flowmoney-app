@@ -55,11 +55,7 @@ WHERE user_id = $1
 func (q *Queries) GetBudgetsByUserId(ctx context.Context, userID int64) (Budget, error) {
 	row := q.db.QueryRow(ctx, getBudgetsByUserId, userID)
 	var i Budget
-	err := row.Scan(
-		&i.UserID,
-		&i.WeeklyLimit,
-		&i.MonthlyLimit,
-	)
+	err := row.Scan(&i.UserID, &i.WeeklyLimit, &i.MonthlyLimit)
 	return i, err
 }
 
@@ -99,7 +95,7 @@ func (q *Queries) GetCategoriesByUserId(ctx context.Context, userID int64) ([]Ca
 }
 
 const getTimelineWithCursor = `-- name: GetTimelineWithCursor :many
-SELECT id, user_id, category_id, amount, created_at, is_deleted, updated_at, currency
+SELECT id, user_id, category_id, amount, created_at, is_deleted, updated_at, currency, comment
 FROM transactions
 WHERE user_id   = $1
   AND is_deleted = false
@@ -132,6 +128,7 @@ func (q *Queries) GetTimelineWithCursor(ctx context.Context, arg GetTimelineWith
 			&i.IsDeleted,
 			&i.UpdatedAt,
 			&i.Currency,
+			&i.Comment,
 		); err != nil {
 			return nil, err
 		}
@@ -144,7 +141,7 @@ func (q *Queries) GetTimelineWithCursor(ctx context.Context, arg GetTimelineWith
 }
 
 const getTransactionsDelta = `-- name: GetTransactionsDelta :many
-SELECT id, category_id, amount, created_at, is_deleted, updated_at, currency
+SELECT id, category_id, amount, created_at, is_deleted, updated_at, currency, comment
 FROM transactions
 WHERE user_id = $1 AND updated_at > $2
 ORDER BY updated_at ASC
@@ -163,6 +160,7 @@ type GetTransactionsDeltaRow struct {
 	IsDeleted  bool               `json:"is_deleted"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 	Currency   string             `json:"currency"`
+	Comment    string             `json:"comment"`
 }
 
 func (q *Queries) GetTransactionsDelta(ctx context.Context, arg GetTransactionsDeltaParams) ([]GetTransactionsDeltaRow, error) {
@@ -182,6 +180,7 @@ func (q *Queries) GetTransactionsDelta(ctx context.Context, arg GetTransactionsD
 			&i.IsDeleted,
 			&i.UpdatedAt,
 			&i.Currency,
+			&i.Comment,
 		); err != nil {
 			return nil, err
 		}
@@ -222,45 +221,7 @@ type UpsertBudgetParams struct {
 }
 
 func (q *Queries) UpsertBudget(ctx context.Context, arg UpsertBudgetParams) error {
-	_, err := q.db.Exec(ctx, upsertBudget,
-		arg.UserID,
-		arg.WeeklyLimit,
-		arg.MonthlyLimit,
-	)
-	return err
-}
-
-const upsertTransaction = `-- name: UpsertTransaction :exec
-INSERT INTO transactions (id, user_id, category_id, amount, created_at, is_deleted, currency)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (id) DO UPDATE
-SET category_id = EXCLUDED.category_id,
-    amount      = EXCLUDED.amount,
-    is_deleted  = EXCLUDED.is_deleted,
-    currency    = EXCLUDED.currency,
-    updated_at  = NOW()
-`
-
-type UpsertTransactionParams struct {
-	ID         pgtype.UUID        `json:"id"`
-	UserID     int64              `json:"user_id"`
-	CategoryID pgtype.UUID        `json:"category_id"`
-	Amount     pgtype.Numeric     `json:"amount"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	IsDeleted  bool               `json:"is_deleted"`
-	Currency   string             `json:"currency"`
-}
-
-func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionParams) error {
-	_, err := q.db.Exec(ctx, upsertTransaction,
-		arg.ID,
-		arg.UserID,
-		arg.CategoryID,
-		arg.Amount,
-		arg.CreatedAt,
-		arg.IsDeleted,
-		arg.Currency,
-	)
+	_, err := q.db.Exec(ctx, upsertBudget, arg.UserID, arg.WeeklyLimit, arg.MonthlyLimit)
 	return err
 }
 
@@ -292,6 +253,43 @@ func (q *Queries) UpsertCategory(ctx context.Context, arg UpsertCategoryParams) 
 		arg.Color,
 		arg.Icon,
 		arg.SortOrder,
+	)
+	return err
+}
+
+const upsertTransaction = `-- name: UpsertTransaction :exec
+INSERT INTO transactions (id, user_id, category_id, amount, created_at, is_deleted, currency, comment)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (id) DO UPDATE
+SET category_id = EXCLUDED.category_id,
+    amount      = EXCLUDED.amount,
+    is_deleted  = EXCLUDED.is_deleted,
+    currency    = EXCLUDED.currency,
+    comment     = EXCLUDED.comment,
+    updated_at  = NOW()
+`
+
+type UpsertTransactionParams struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     int64              `json:"user_id"`
+	CategoryID pgtype.UUID        `json:"category_id"`
+	Amount     pgtype.Numeric     `json:"amount"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	IsDeleted  bool               `json:"is_deleted"`
+	Currency   string             `json:"currency"`
+	Comment    string             `json:"comment"`
+}
+
+func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionParams) error {
+	_, err := q.db.Exec(ctx, upsertTransaction,
+		arg.ID,
+		arg.UserID,
+		arg.CategoryID,
+		arg.Amount,
+		arg.CreatedAt,
+		arg.IsDeleted,
+		arg.Currency,
+		arg.Comment,
 	)
 	return err
 }

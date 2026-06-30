@@ -794,16 +794,21 @@ function handleAddTransaction() {
   const catId = Store.state.selectedCategory;
   if (!amount || !catId) return;
 
+  const commentInput = document.getElementById('tx-comment-input');
+  const comment = commentInput ? commentInput.value.trim() : '';
+
   // Сохраняем локально — StorageManager сам обновит Store (оптимистичный апдейт)
   const tx = StorageManager.saveTransactionLocally({
     category_id: catId,
     amount,
     created_at: new Date().toISOString(),
+    comment: comment || undefined,
   });
 
   // Сбрасываем ввод
   Store.state.inputAmount = '';
   Store.state.selectedCategory = null;
+  if (commentInput) commentInput.value = '';
 
   // Сбрасываем выделение категории в DOM
   document.querySelectorAll('.category-item.selected').forEach(el => {

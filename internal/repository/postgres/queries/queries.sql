@@ -26,7 +26,7 @@ WHERE user_id   = $1
 GROUP BY category_id;
 
 -- name: GetTimelineWithCursor :many
-SELECT id, user_id, category_id, amount, created_at, is_deleted, updated_at, currency
+SELECT id, user_id, category_id, amount, created_at, is_deleted, updated_at, currency, comment
 FROM transactions
 WHERE user_id   = $1
   AND is_deleted = false
@@ -35,17 +35,18 @@ ORDER BY created_at DESC
 LIMIT $3;
 
 -- name: UpsertTransaction :exec
-INSERT INTO transactions (id, user_id, category_id, amount, created_at, is_deleted, currency)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO transactions (id, user_id, category_id, amount, created_at, is_deleted, currency, comment)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (id) DO UPDATE
 SET category_id = EXCLUDED.category_id,
     amount      = EXCLUDED.amount,
     is_deleted  = EXCLUDED.is_deleted,
     currency    = EXCLUDED.currency,
+    comment     = EXCLUDED.comment,
     updated_at  = NOW();
 
 -- name: GetTransactionsDelta :many
-SELECT id, category_id, amount, created_at, is_deleted, updated_at, currency
+SELECT id, category_id, amount, created_at, is_deleted, updated_at, currency, comment
 FROM transactions
 WHERE user_id = $1 AND updated_at > $2
 ORDER BY updated_at ASC;

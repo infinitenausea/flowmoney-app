@@ -256,6 +256,14 @@ const DonutChart = (() => {
         timeEl.textContent = time;
 
         infoEl.appendChild(nameEl);
+
+        if (tx.comment) {
+          const commentEl = document.createElement('div');
+          commentEl.className = 'timeline-comment';
+          commentEl.textContent = tx.comment;
+          infoEl.appendChild(commentEl);
+        }
+
         infoEl.appendChild(timeEl);
 
         // Amount
