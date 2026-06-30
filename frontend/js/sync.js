@@ -56,20 +56,46 @@ const SyncRunner = (() => {
    * Это позволяет десктопному клиенту видеть транзакции, добавленные с мобильного.
    */
   async function _pull(initData) {
-    const since = StorageManager.getLastSyncedAt();
-    const url = since
-      ? `/api/v1/analytics/timeline?since=${encodeURIComponent(since)}`
-      : '/api/v1/analytics/timeline?limit=200';
+    const headers = { 'Authorization': `Telegram ${initData}` };
 
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Telegram ${initData}` },
-    });
-    if (!res.ok) return;
+    // Fetch categories delta alongside transactions so newly created/renamed
+    // categories on other devices resolve immediately instead of showing "Unknown".
+    const [txRes, bootstrapRes] = await Promise.all([
+      fetch(
+        StorageManager.getLastSyncedAt()
+          ? `/api/v1/analytics/timeline?since=${encodeURIComponent(StorageManager.getLastSyncedAt())}`
+          : '/api/v1/analytics/timeline?limit=200',
+        { headers }
+      ),
+      fetch('/api/v1/bootstrap', { headers }),
+    ]);
 
-    const data = await res.json();
+    let categoriesUpdated = false;
+
+    if (bootstrapRes.ok) {
+      const bData = await bootstrapRes.json();
+      const serverCats = bData.categories || [];
+      if (serverCats.length) {
+        const merged = StorageManager.mergeCategoriesFromServer(serverCats, false);
+        Store.state.categories = merged;
+        categoriesUpdated = true;
+        console.info('[Sync] Pulled', serverCats.length, 'category(ies)');
+      }
+    }
+
+    if (!txRes.ok) return;
+
+    const data = await txRes.json();
     if (data?.items?.length) {
       StorageManager.mergeFromServer(data.items);
-      console.info('[Sync] Pulled', data.items.length, 'transaction(s)', since ? '(delta)' : '(full)');
+      console.info('[Sync] Pulled', data.items.length, 'transaction(s)');
+    }
+
+    // When categories changed but no new transactions arrived, the timeline
+    // still holds stale category lookups — force a re-render by nudging the
+    // transactions key, which fires the Store subscriber that calls loadAnalyticsData().
+    if (categoriesUpdated && !data?.items?.length) {
+      Store.state.transactions = [...(Store.state.transactions || [])];
     }
   }
 
