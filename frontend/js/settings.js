@@ -17,6 +17,10 @@ const Settings = (() => {
   let _editingLimit = null; // 'daily' | 'weekly' | 'monthly'
   let _budgetInput  = '';
 
+  let _activeCurrencyTarget = null; // 'main' | 'from' | 'to'
+  let _converterFrom = 'RUB';
+  let _converterTo   = 'USD';
+
   const MAX_DIGITS   = 7;
   const MAX_DECIMALS = 2;
   const MAX_AMOUNT   = 9999999;
@@ -163,11 +167,10 @@ const Settings = (() => {
 
     if (limitType === 'converter') {
       const fromEl  = document.getElementById('converter-from-amount');
-      const fromSel = document.getElementById('converter-from-currency');
       const text    = fromEl ? fromEl.textContent : '0';
       initialAmount = (text && text !== '0') ? text : '';
       title         = 'Сумма';
-      currencyCode  = fromSel ? fromSel.value : currencyCode;
+      currencyCode  = _converterFrom;
     } else {
       const currentVal = {
         daily:   Store.state.dailyLimit   || 0,
@@ -257,23 +260,19 @@ const Settings = (() => {
   // ── Converter ────────────────────────────────────────────────────────────
 
   function _updateConverterResult() {
-    const fromSel = document.getElementById('converter-from-currency');
-    const toSel   = document.getElementById('converter-to-currency');
-    const fromEl  = document.getElementById('converter-from-amount');
-    const toEl    = document.getElementById('converter-to-amount');
-    if (!fromSel || !toSel || !toEl) return;
+    const fromEl = document.getElementById('converter-from-amount');
+    const toEl   = document.getElementById('converter-to-amount');
+    if (!toEl) return;
 
-    const fromCode = fromSel.value;
-    const toCode   = toSel.value;
-    const rates    = Store.state.rates || {};
-    const amount   = parseFloat(fromEl ? fromEl.textContent : '0') || 0;
+    const rates  = Store.state.rates || {};
+    const amount = parseFloat(fromEl ? fromEl.textContent : '0') || 0;
 
-    if (!rates[fromCode] || !rates[toCode] || amount === 0) {
+    if (!rates[_converterFrom] || !rates[_converterTo] || amount === 0) {
       toEl.textContent = '0';
       return;
     }
 
-    const result = amount / rates[fromCode] * rates[toCode];
+    const result = amount / rates[_converterFrom] * rates[_converterTo];
     toEl.textContent = result.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
   }
 
@@ -286,14 +285,27 @@ const Settings = (() => {
     EUR: '€ Евро',
   };
 
+  const _CURRENCY_COMPACT = {
+    RUB: '₽ RUB',
+    GEL: '₾ GEL',
+    USD: '$ USD',
+    EUR: '€ EUR',
+  };
+
   // ── Currency bottom sheet ─────────────────────────────────────────────────
 
-  function _openCurrencySheet() {
+  function _openCurrencySheet(target) {
+    _activeCurrencyTarget = target || 'main';
     const sheet = document.getElementById('currency-options-sheet');
     if (!sheet) return;
-    const cur = Store.state.currency || 'RUB';
+
+    let activeCur;
+    if (_activeCurrencyTarget === 'from')      activeCur = _converterFrom;
+    else if (_activeCurrencyTarget === 'to')   activeCur = _converterTo;
+    else                                        activeCur = Store.state.currency || 'RUB';
+
     sheet.querySelectorAll('.currency-sheet-option').forEach(opt => {
-      opt.classList.toggle('selected', opt.dataset.currency === cur);
+      opt.classList.toggle('selected', opt.dataset.currency === activeCur);
     });
     sheet.setAttribute('aria-hidden', 'false');
     requestAnimationFrame(() => sheet.classList.add('active'));
@@ -363,8 +375,11 @@ const Settings = (() => {
       }
 
       // Keep converter from-currency in sync with main currency
-      const fromSel = document.getElementById('converter-from-currency');
-      if (fromSel && val) fromSel.value = val;
+      if (val) {
+        _converterFrom = val;
+        const fromLabel = document.getElementById('converter-from-label');
+        if (fromLabel) fromLabel.textContent = _CURRENCY_COMPACT[val] || val;
+      }
 
       _refreshLimitDisplays();
       renderProgressBars();
@@ -374,7 +389,7 @@ const Settings = (() => {
     if (customCurrencyBtn) {
       customCurrencyBtn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        _openCurrencySheet();
+        _openCurrencySheet('main');
       });
     }
 
@@ -388,10 +403,22 @@ const Settings = (() => {
         opt.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           const newCur = opt.dataset.currency;
-          if (newCur) {
+          if (!newCur) return;
+
+          if (_activeCurrencyTarget === 'from') {
+            _converterFrom = newCur;
+            const label = document.getElementById('converter-from-label');
+            if (label) label.textContent = _CURRENCY_COMPACT[newCur] || newCur;
+            _updateConverterResult();
+          } else if (_activeCurrencyTarget === 'to') {
+            _converterTo = newCur;
+            const label = document.getElementById('converter-to-label');
+            if (label) label.textContent = _CURRENCY_COMPACT[newCur] || newCur;
+            _updateConverterResult();
+          } else {
             _handleCurrencyChange(newCur);
-            _closeCurrencySheet();
           }
+          _closeCurrencySheet();
         });
       });
     }
@@ -462,35 +489,50 @@ const Settings = (() => {
     Store.subscribe('rates', _updateConverterResult);
 
     // ── Converter widget ─────────────────────────────────────────────────
-    const converterFromBtn = document.getElementById('converter-from-amount');
-    const converterFromSel = document.getElementById('converter-from-currency');
-    const converterToSel   = document.getElementById('converter-to-currency');
-    const converterSwapBtn = document.getElementById('converter-swap');
 
-    // Default converter currencies: from = main currency, to = USD (or RUB if main is USD)
-    if (converterFromSel) converterFromSel.value = Store.state.currency || 'RUB';
-    if (converterToSel) {
-      const main = Store.state.currency || 'RUB';
-      converterToSel.value = main === 'USD' ? 'RUB' : 'USD';
-    }
+    // Init local state: from = main currency, to = USD (or RUB if main is USD)
+    _converterFrom = Store.state.currency || 'RUB';
+    _converterTo   = _converterFrom === 'USD' ? 'RUB' : 'USD';
 
-    if (converterFromBtn) {
-      converterFromBtn.addEventListener('pointerdown', (e) => {
+    const fromLabel = document.getElementById('converter-from-label');
+    const toLabel   = document.getElementById('converter-to-label');
+    if (fromLabel) fromLabel.textContent = _CURRENCY_COMPACT[_converterFrom] || _converterFrom;
+    if (toLabel)   toLabel.textContent   = _CURRENCY_COMPACT[_converterTo]   || _converterTo;
+
+    const converterAmountBtn   = document.getElementById('converter-from-amount');
+    const converterFromSelBtn  = document.getElementById('custom-converter-from-select');
+    const converterToSelBtn    = document.getElementById('custom-converter-to-select');
+    const converterSwapBtn     = document.getElementById('converter-swap');
+
+    if (converterAmountBtn) {
+      converterAmountBtn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         _openModal('converter');
       });
     }
 
-    if (converterFromSel) converterFromSel.addEventListener('change', _updateConverterResult);
-    if (converterToSel)   converterToSel.addEventListener('change', _updateConverterResult);
+    if (converterFromSelBtn) {
+      converterFromSelBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        _openCurrencySheet('from');
+      });
+    }
+
+    if (converterToSelBtn) {
+      converterToSelBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        _openCurrencySheet('to');
+      });
+    }
 
     if (converterSwapBtn) {
       converterSwapBtn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        if (!converterFromSel || !converterToSel) return;
-        const temp = converterFromSel.value;
-        converterFromSel.value = converterToSel.value;
-        converterToSel.value   = temp;
+        const temp   = _converterFrom;
+        _converterFrom = _converterTo;
+        _converterTo   = temp;
+        if (fromLabel) fromLabel.textContent = _CURRENCY_COMPACT[_converterFrom] || _converterFrom;
+        if (toLabel)   toLabel.textContent   = _CURRENCY_COMPACT[_converterTo]   || _converterTo;
         _updateConverterResult();
         window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.();
       });

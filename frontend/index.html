@@ -178,12 +178,15 @@
           <div class="converter-widget">
             <div class="converter-row">
               <button class="converter-amount-btn" id="converter-from-amount" aria-label="Сумма для конвертации">0</button>
-              <select class="converter-currency-select" id="converter-from-currency" aria-label="Исходная валюта">
-                <option value="RUB">₽ RUB</option>
-                <option value="GEL">₾ GEL</option>
-                <option value="USD">$ USD</option>
-                <option value="EUR">€ EUR</option>
-              </select>
+              <div id="custom-converter-from-select" class="custom-select compact-select"
+                   role="button" aria-haspopup="listbox" aria-label="Исходная валюта">
+                <span id="converter-from-label">₽ RUB</span>
+                <svg class="custom-select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </div>
             </div>
             <button class="converter-swap-btn" id="converter-swap" aria-label="Поменять валюты местами">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -192,12 +195,15 @@
             </button>
             <div class="converter-row">
               <div class="converter-amount-result" id="converter-to-amount" aria-live="polite">0</div>
-              <select class="converter-currency-select" id="converter-to-currency" aria-label="Целевая валюта">
-                <option value="RUB">₽ RUB</option>
-                <option value="GEL">₾ GEL</option>
-                <option value="USD">$ USD</option>
-                <option value="EUR">€ EUR</option>
-              </select>
+              <div id="custom-converter-to-select" class="custom-select compact-select"
+                   role="button" aria-haspopup="listbox" aria-label="Целевая валюта">
+                <span id="converter-to-label">$ USD</span>
+                <svg class="custom-select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </div>
             </div>
           </div>
         </div>

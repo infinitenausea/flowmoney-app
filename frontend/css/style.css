@@ -1027,25 +1027,16 @@ input[type="range"]::-moz-range-thumb {
   text-overflow: ellipsis;
 }
 
-.converter-currency-select {
+.compact-select {
   flex-shrink: 0;
   width: auto;
   min-width: 84px;
-  padding: 7px 28px 7px 10px;
-  border-radius: var(--radius-sm);
-  background-color: color-mix(in srgb, var(--accent-color) 10%, transparent);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  color: var(--text-color);
-  font-family: inherit;
+  height: 38px;
+  padding: 0 10px;
   font-size: 14px;
   font-weight: 600;
-  border: none;
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
 }
 
 .converter-swap-btn {
