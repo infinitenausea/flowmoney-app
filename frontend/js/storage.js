@@ -75,6 +75,7 @@ const StorageManager = (() => {
       id:          self.crypto.randomUUID(),
       category_id: txPartial.category_id,
       amount:      txPartial.amount,
+      currency:    Store.state.currency || 'RUB',
       created_at:  txPartial.created_at || new Date().toISOString(),
       is_deleted:  false,
       synced:      false,

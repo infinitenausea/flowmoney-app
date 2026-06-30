@@ -38,7 +38,17 @@ const DonutChart = (() => {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const total = _lastData.reduce((s, d) => s + (d.total || 0), 0);
+    // Convert each item's total from its source currency to the current display currency.
+    // items coming from the backend carry no currency field, so we treat them as RUB (server base).
+    const _cur   = Store.state.currency || 'RUB';
+    const _rates = Store.state.rates || {};
+    function _convertTotal(item) {
+      const src = item.currency || 'RUB';
+      if (src === _cur || !_rates[src] || !_rates[_cur]) return item.total || 0;
+      return ((item.total || 0) / _rates[src]) * _rates[_cur];
+    }
+
+    const total = _lastData.reduce((s, d) => s + _convertTotal(d), 0);
 
     if (!_lastData.length || total === 0) {
       container.innerHTML = '<p class="donut-empty">Нет расходов за этот месяц</p>';
@@ -56,7 +66,8 @@ const DonutChart = (() => {
       const color    = category ? category.color : (item.color || `hsl(${(i * 53) % 360},65%,55%)`);
       const name     = category ? category.name  : (item.name  || 'Разное');
 
-      const frac  = item.total / total;
+      const convertedTotal = _convertTotal(item);
+      const frac  = convertedTotal / total;
       const len   = frac * CIRC;
       const isSel = _selectedCatId === item.category_id;
       const op    = _selectedCatId && !isSel ? 0.28 : 1;
@@ -89,7 +100,7 @@ const DonutChart = (() => {
     const centerLabel = focusedCat
       ? focusedCat.name.slice(0, 12)
       : (focused ? (focused.name || '').slice(0, 12) : 'Месяц');
-    const centerAmt   = focused ? focused.total : total;
+    const centerAmt   = focused ? _convertTotal(focused) : total;
 
     container.innerHTML = `
       <div class="donut-chart-wrap">
@@ -172,7 +183,12 @@ const DonutChart = (() => {
         const color        = cat.color || '#888888';
         const categoryIcon = cat.icon  || '💰';
         const categoryName = cat.name  || 'Неизвестная';
-        const cur          = Store.state.currency || '₽';
+        const cur          = Store.state.currency || 'RUB';
+        const txCurrency   = tx.currency || cur;
+        const rates        = Store.state.rates || {};
+        const displayAmount = (txCurrency !== cur && rates[txCurrency] && rates[cur])
+          ? (tx.amount / rates[txCurrency]) * rates[cur]
+          : tx.amount;
         const time         = new Date(tx.created_at)
           .toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
@@ -209,7 +225,7 @@ const DonutChart = (() => {
         // Amount
         const amountEl = document.createElement('div');
         amountEl.className = 'timeline-item-amount';
-        amountEl.textContent = _fmtAmount(tx.amount, cur);
+        amountEl.textContent = _fmtAmount(displayAmount, cur);
 
         contentEl.appendChild(iconEl);
         contentEl.appendChild(infoEl);
