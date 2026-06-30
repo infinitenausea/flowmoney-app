@@ -52,6 +52,7 @@ Authorization: Telegram <initData>
 4. `secret_key = HMAC-SHA256(key="WebAppData", data=botToken)`
 5. `expectedHash = HMAC-SHA256(key=secret_key, data=dataCheckString)`
 6. Compare `expectedHash` vs `hash` with `crypto/subtle.ConstantTimeCompare` (timing-safe).
+7. Validate `auth_date` — must be present, parseable, and ≤ 86 400 s (24 h) old. Returns `ErrExpired` if stale.
 
 **`telegram_id` extraction** (`internal/delivery/http/middleware.go`):
 
@@ -134,11 +135,11 @@ The single `<div id="currency-options-sheet">` element is a shared, reusable bot
 | `#custom-converter-from-select` (converter "From" button) | `'from'` | Sets `_converterFrom`, updates `#converter-from-label` text via `_CURRENCY_COMPACT`, calls `_updateConverterResult()` |
 | `#custom-converter-to-select` (converter "To" button) | `'to'` | Sets `_converterTo`, updates `#converter-to-label` text via `_CURRENCY_COMPACT`, calls `_updateConverterResult()` |
 
-**Open:** `_openCurrencySheet(target)` writes `_activeCurrencyTarget`, then toggles the `.selected` CSS class on the `.currency-sheet-option` matching the active currency for that context (`_converterFrom`, `_converterTo`, or `Store.state.currency`). The sheet becomes visible via `requestAnimationFrame(() => sheet.classList.add('active'))`.
+**Open:** `_openCurrencySheet(target)` writes `_activeCurrencyTarget`, then toggles the `.selected` CSS class on the `.currency-sheet-option` matching the active currency for that context. The sheet becomes visible via `requestAnimationFrame(() => sheet.classList.add('active'))`.
 
 **Close:** `_closeCurrencySheet()` removes `.active`; `aria-hidden="true"` is restored after a 340 ms CSS transition delay. The backdrop's `pointerdown` also triggers close.
 
-**Selection dispatch:** The `pointerdown` listener on each `.currency-sheet-option` reads `opt.dataset.currency` and branches on `_activeCurrencyTarget`. All three code paths end with `_closeCurrencySheet()`. All bindings use `pointerdown` with `e.preventDefault()` — consistent with the rest of the app's tap-delay elimination strategy (see §2.5).
+**Selection dispatch:** The `pointerdown` listener on each `.currency-sheet-option` reads `opt.dataset.currency` and branches on `_activeCurrencyTarget`. All three code paths end with `_closeCurrencySheet()`. All bindings use `pointerdown` with `e.preventDefault()` — consistent with the tap-delay elimination strategy (see §2.5).
 
 ### 2.7 Кастомный календарь-шторка (`#calendar-sheet`)
 
@@ -165,7 +166,7 @@ The single `<div id="currency-options-sheet">` element is a shared, reusable bot
 
 **Рендер сетки (`renderGrid()`):**
 - Вычисляет смещение первого дня (пн=0): `(firstDow + 6) % 7` — без привязки к воскресенью как нулевому дню.
-- Для каждого дня создаёт `div.calendar-day` и число через **`document.createTextNode(String(day))`** — строго без HTML-парсинга (защита от XSS согласно §6.2).
+- Для каждого дня создаёт `div.calendar-day` и число через **`document.createTextNode(String(day))`** — строго без HTML-парсинга (XSS-защита, см. §8.2).
 - Классы `today`, `range-start`, `range-end`, `in-range` проставляются сравнением нормализованных Unix-таймстампов (`new Date(year, month, day).getTime()`).
 - Дни строятся в `DocumentFragment` и вставляются единственным `appendChild`.
 
@@ -202,7 +203,7 @@ The single `<div id="currency-options-sheet">` element is a shared, reusable bot
 | ~~`GET`~~ | ~~`/api/v1/analytics/donut`~~ **[REMOVED]** | — | — |
 | `GET` | `/api/v1/analytics/timeline` | 200 JSON | 400, 401, 500 |
 
-> **Архитектурное примечание:** Расчёт аналитики пончика полностью перенесён на сторону клиента (Offline-First) для устранения сетевых задержек и конфликтов часовых поясов сервера. Эндпоинт не вызывается фронтендом с коммита `f4232f2`. Логика агрегации — в `computeLocalDonutData()` (`app.js:420`); детали — в §7.
+> **Архитектурное примечание:** Расчёт аналитики пончика полностью перенесён на сторону клиента (Offline-First). Эндпоинт не вызывается фронтендом. Логика агрегации — в `computeLocalDonutData()` (`app.js`); детали — в §5.
 
 ### 3.3 Response Structures
 
@@ -231,7 +232,7 @@ On first call for a new `telegram_id`, `UpsertUser` creates the user row (defaul
   ],
   "rates": {
     "USD": 1.0,
-    "RUB": 90.0,
+    "RUB": 93.50,
     "GEL": 2.72,
     "EUR": 0.92
   }
@@ -242,21 +243,24 @@ If no budget row exists, `budget` fields are all `0` (`pgx.ErrNoRows` is handled
 
 **`POST /api/v1/sync`**
 
-The backend expects a **bare JSON array** (not an object wrapper). Each item:
+Body is a JSON **object with a `transactions` array** (1 MB cap enforced via `http.MaxBytesReader`):
 
 ```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "category_id": "11111111-1111-1111-1111-111111111101",
-    "amount": 350.00,
-    "created_at": "2026-06-30T14:22:00Z",
-    "is_deleted": false
-  }
-]
+{
+  "transactions": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "category_id": "11111111-1111-1111-1111-111111111101",
+      "amount": 350.00,
+      "currency": "RUB",
+      "created_at": "2026-06-30T14:22:00Z",
+      "is_deleted": false
+    }
+  ]
+}
 ```
 
-All items are processed in a single `BEGIN/COMMIT` transaction. Each item is an `UpsertTransaction` (`ON CONFLICT (id) DO UPDATE`). On any error, the entire batch is rolled back.
+All items are processed in a single `BEGIN/COMMIT` transaction. Each item is an `UpsertTransaction` (`ON CONFLICT (id) DO UPDATE`). If `currency` is empty string, the handler defaults it to `"USD"`. On any error, the entire batch is rolled back.
 
 **`PUT /api/v1/settings`**
 
@@ -273,14 +277,15 @@ All items are processed in a single `BEGIN/COMMIT` transaction. Each item is an 
 
 ~~**`GET /api/v1/analytics/donut`** **[REMOVED]**~~
 
-> Эндпоинт выведен из эксплуатации. Серверная реализация сохранена в `internal/delivery/http/analytics.go` и `queries/queries.sql` (запрос `GetAnalyticsDonut`), но фронтенд её не вызывает. Агрегация выполняется локально функцией `computeLocalDonutData()` (`app.js:420`).
+> Эндпоинт выведен из эксплуатации. Серверная реализация сохранена в `internal/delivery/http/analytics.go` и `queries/queries.sql` (запрос `GetAnalyticsDonut`), но фронтенд её не вызывает.
 
-**`GET /api/v1/analytics/timeline?cursor=RFC3339&limit=N`**
+**`GET /api/v1/analytics/timeline`**
 
-Cursor-based pagination. Default limit: 20. Max limit: 200.
+The endpoint has **two distinct operating modes** determined by query parameters:
 
-- `cursor` — RFC3339 timestamp; returns items with `created_at < cursor` (older than cursor).
-- Response `next_cursor` — RFC3339Nano timestamp of the **oldest item in the current page**. Pass as `cursor` for the next page. `null` when there are no more items.
+**Mode A — Delta Pull (`?since=RFC3339`)**
+
+Returns all records (including soft-deleted) whose `updated_at > since`, ordered by `updated_at ASC`. Used by `SyncRunner._pull()` on subsequent syncs. Backed by `GetTransactionsDelta` query and `idx_transactions_user_updated_at` index.
 
 ```json
 {
@@ -289,24 +294,209 @@ Cursor-based pagination. Default limit: 20. Max limit: 200.
       "id": "uuid",
       "category_id": "uuid",
       "amount": 350.00,
+      "currency": "RUB",
       "created_at": "2026-06-30T14:22:00Z",
-      "is_deleted": false
+      "is_deleted": false,
+      "updated_at": "2026-06-30T14:22:00Z"
+    }
+  ]
+}
+```
+
+**Mode B — Cursor-based Timeline (`?cursor=RFC3339&limit=N`)**
+
+Returns only non-deleted transactions with `created_at < cursor`, ordered `created_at DESC`. Used for initial data load. Default limit: 20. Max limit: 200. Backed by `GetTimelineWithCursor` query and `idx_transactions_user_timeline` partial index.
+
+- `cursor` — RFC3339 timestamp; returns items older than cursor.
+- Response `next_cursor` — RFC3339Nano timestamp of the **oldest item in the current page**. `null` when no more items.
+
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "category_id": "uuid",
+      "amount": 350.00,
+      "currency": "RUB",
+      "created_at": "2026-06-30T14:22:00Z",
+      "is_deleted": false,
+      "updated_at": "2026-06-30T14:22:00Z"
     }
   ],
   "next_cursor": "2026-06-29T10:15:00.123456789Z"
 }
 ```
 
-Only non-deleted transactions are returned. Query uses the partial composite index `idx_transactions_user_timeline`.
+---
+
+## 4. Delta Sync Protocol
+
+The sync system is **bidirectional** and **Offline-First**: local state is always consistent, and server sync happens in the background without blocking UI.
+
+### 4.1 SyncRunner Architecture (`frontend/js/sync.js`)
+
+`SyncRunner` is a private IIFE module exposed as `window.SyncRunner`.
+
+**Triggers:**
+- `SyncRunner.start()` wires two triggers: `setInterval(syncWithBackend, 15_000)` and `window.addEventListener('online', syncWithBackend)`.
+- An immediate attempt fires if `navigator.onLine === true` at startup.
+- `SyncRunner.syncWithBackend()` is also called out-of-band (without waiting for the interval) immediately after every transaction save in `app.js`.
+
+**Mutex:** `_isSyncing` boolean flag prevents concurrent sync cycles. If a cycle is already running, `syncWithBackend()` returns immediately. The flag is released in a `finally` block.
+
+**Error handling:** All network errors are silently swallowed (`console.warn`). The cycle fails gracefully — the next interval or online event retries automatically.
+
+### 4.2 Push Phase (`_push`)
+
+```
+pending = StorageManager.getUnsyncedTransactions()  // filter: !tx.synced
+if pending.length === 0 → early return (no network request made)
+
+POST /api/v1/sync  { "transactions": pending }
+→ 200 OK   → StorageManager.markAsSynced(pending.map(tx => tx.id))
+→ non-2xx  → throw Error → caught by syncWithBackend, will retry next cycle
+```
+
+**Idempotency:** The backend uses `UpsertTransaction` (`ON CONFLICT (id) DO UPDATE`). Retrying the same batch is safe.
+
+**Optimistic UI:** `saveTransactionLocally()` writes to localStorage and updates `Store.state.transactions` immediately. The `synced: false` flag causes the `.sync-pending` indicator to appear in the timeline until `markAsSynced()` flips it.
+
+### 4.3 Pull Phase (`_pull`)
+
+The pull phase uses **two different API modes** depending on whether a prior sync has occurred:
+
+| Condition | URL | Backend query | Includes `is_deleted: true`? |
+|---|---|---|---|
+| First sync (`getLastSyncedAt() === null`) | `?limit=200` | `GetTimelineWithCursor` | No |
+| Subsequent syncs | `?since=<last_updated_at>` | `GetTransactionsDelta` | **Yes** |
+
+`getLastSyncedAt()` reads `localStorage['flowmoney_last_synced_at']` (an RFC3339 string).
+
+After a successful delta pull, `mergeFromServer(data.items)` updates `last_synced_at` with the **maximum `updated_at`** among returned items, advancing the delta window for the next cycle.
+
+### 4.4 Conflict Resolution (`StorageManager.mergeFromServer`)
+
+The client-side merge algorithm (`storage.js`) applies the following rules per server record:
+
+| Condition | Action |
+|---|---|
+| `serverTx.is_deleted === true` | Remove from `localMap` (hard delete from client state) |
+| `serverTx.id` not in `localMap` | Insert as new record (`synced: true, _pending: false`) |
+| `localMap[id]._pending === true` | **Skip** — local record is in-flight; server must not overwrite |
+| `localMap[id]._pending === false` | Replace with server version (`synced: true`) |
+
+**Currency field preservation:** The merge prefers the local `currency` value over the server's:
+
+```js
+const currency = (local && local.currency) || serverTx.currency || Store.state.currency || 'RUB';
+```
+
+Priority: `local.currency` › `serverTx.currency` › current app currency › `'RUB'`.
+
+**`last_synced_at` update:** After iterating all items, the maximum `updated_at` seen across all server records is persisted to `localStorage['flowmoney_last_synced_at']`. This value becomes the `since` parameter for the next delta pull.
 
 ---
 
-## 4. Data Model
+## 5. Multi-Currency Engine
 
-### 4.1 DDL
+### 5.1 Backend: RatesManager (`internal/service/rates.go`)
+
+`RatesManager` holds exchange rates **relative to USD** (USD = 1.0) in a thread-safe in-memory map. It is initialized with hardcoded fallback rates and fetches live rates on startup and every 12 hours.
+
+**Supported currencies:** `USD`, `RUB`, `GEL`, `EUR` (hardcoded allowlist; enforced in both `fetch()` and `PUT /settings` handler).
+
+**Data source:** `GET https://open.er-api.com/v6/latest/USD` (unauthenticated free tier; ~60 req/month at 12h interval; free tier limit: 1 500 req/month).
+
+**Failure behavior:** On any error (network, decode, non-`"success"` result field), `[RATES WARN]` is logged and last known in-memory rates are retained unchanged. The bootstrap response always returns some rates — never null or empty.
+
+**Thread safety:** `sync.RWMutex` — `Rates()` takes a read lock and returns a **copy** of the map; `fetch()` takes a write lock only during the update loop.
+
+**Hardcoded fallback values:**
+
+| Currency | Rate vs USD |
+|---|---|
+| USD | 1.0 |
+| RUB | 93.50 |
+| GEL | 2.72 |
+| EUR | 0.92 |
+
+### 5.2 Transaction Currency Isolation
+
+Each transaction carries its own `currency` field, set at creation time and **never changed** for the life of the record. This separates the transaction's native currency from the system display currency:
+
+- **At save time** (`StorageManager.saveTransactionLocally()`): `currency = Store.state.currency || 'RUB'` — locked to the app currency at the moment the user confirms the transaction.
+- **At sync time** (`POST /api/v1/sync`): `currency` is sent in the payload and stored in the `transactions.currency` column.
+- **At display time** (timeline): amounts are converted on-the-fly to the current display currency using live rates from `Store.state.rates`.
+- **At analytics time** (`computeLocalDonutData()`): amounts are converted to the current app currency before category aggregation.
+
+### 5.3 `computeLocalDonutData()` — Math Model
+
+All aggregation is client-side (Offline-First). The function filters transactions by `Store.state.analyticsRange` (`{ start: number, end: number }` in Unix-ms) and groups by `category_id`.
+
+**Conversion formula (exact implementation):**
+
+```js
+const appCur     = (Store.state.currency || 'RUB').toUpperCase(); // forced UPPERCASE
+const txCurrency = (tx.currency || appCur).toUpperCase();          // forced UPPERCASE
+
+let amountInAppCurrency = parseFloat(tx.amount) || 0;
+
+if (txCurrency !== appCur && rates[txCurrency] && rates[appCur]) {
+  amountInAppCurrency = (amountInAppCurrency / rates[txCurrency]) * rates[appCur];
+}
+
+groups[tx.category_id] = (groups[tx.category_id] || 0) + amountInAppCurrency;
+```
+
+**Key invariants:**
+
+- Both `txCurrency` and `appCur` are **forcibly uppercased** before being used as keys into the `rates` map. This prevents mismatches between mixed-case values that may be stored locally and the UPPERCASE keys returned by the exchange rate API and the backend.
+- Conversion is skipped (no floating-point rounding applied) when `txCurrency === appCur`.
+- Missing rate keys (`!rates[txCurrency]` or `!rates[appCur]`) also skip conversion — the raw amount is used as-is (safe degradation, no crash).
+- Soft-deleted transactions (`tx.is_deleted === true`) are excluded before grouping.
+- Per-category totals are rounded to 2 decimal places via `Number(groups[catId].toFixed(2))`.
+
+**Date range:** Filtering uses `txTime >= start && txTime <= end`. The `start`/`end` values are Unix-ms numbers from `Store.state.analyticsRange`. When `analyticsPeriod` is `'custom'`, `updateAnalyticsRange()` performs an early return (`if (period === 'custom') return`) to prevent overwriting user-selected dates on Store subscription re-fires.
+
+**Output:** `Array<{ category_id: string, total: number }>` — totals denominated in the current app currency.
+
+### 5.4 UI Optimization: `refreshCurrencyLabels()` (`charts.js`)
+
+When the user changes the display currency, SVG segment geometry does not need to change — only the **text amounts** in the donut center and legend change. `refreshCurrencyLabels()` avoids a full `renderDonutChart()` redraw:
+
+**What it does:**
+1. Accepts `freshData` (output of `computeLocalDonutData()` with new-currency totals) and updates the module-private `_lastData`, so that subsequent segment taps also reflect correct converted amounts.
+2. Recalculates `total = _lastData.reduce((s, d) => s + d.total, 0)`.
+3. Sets `svgTexts[1].textContent` (center amount line) to `centerAmt.toFixed(2) + ' ' + sym`.
+4. For each `.donut-legend-item`, matches by `data-cat-id` attribute and updates only the `.donut-legend-amt` span's `textContent`.
+
+**What it does NOT do:**
+- Does not touch SVG `<circle>` elements — no segment geometry change, no reflow of arc math.
+- Does not rebuild the legend DOM — only mutates text nodes.
+- Does not call `container.innerHTML = ...`.
+
+**Trigger path:**
+
+```
+Settings: user selects new currency
+  → _handleCurrencyChange(newCur)
+  → Store.state.currency = newCur
+    → Store 'currency' subscription fires (initBindings())
+      → if (Store.state.currentTab === 'analytics')
+          freshData = computeLocalDonutData()          // recompute with new currency
+          DonutChart.refreshCurrencyLabels(newCur, freshData)  // text-only update
+```
+
+> **Known debt (Risk 9):** `refreshCurrencyLabels()` currently contains a debug diagnostic line that replaces `svgTexts[0]` (center label) with a UUID summary string on every currency change. See §9.
+
+---
+
+## 6. Data Model
+
+### 6.1 DDL (All Migrations, In Order)
 
 ```sql
--- Migration 000001_init_schema.up.sql
+-- 000001_init_schema.up.sql
 
 CREATE TABLE users (
     tg_id      BIGINT      PRIMARY KEY,
@@ -338,7 +528,6 @@ CREATE TABLE transactions (
 
 CREATE INDEX idx_transactions_user_id    ON transactions(user_id);
 CREATE INDEX idx_transactions_created_at ON transactions(created_at DESC);
--- composite partial: used by GetTimelineWithCursor and donut aggregation
 CREATE INDEX idx_transactions_user_timeline
     ON transactions(user_id, created_at DESC) WHERE is_deleted = FALSE;
 
@@ -351,7 +540,7 @@ CREATE TABLE budgets (
 ```
 
 ```sql
--- Migration 000002_seed_system_categories.up.sql
+-- 000002_seed_system_categories.up.sql
 -- System user (tg_id = 0): sentinel owner of all shared system categories.
 -- Real Telegram IDs are always positive, so 0 is a safe sentinel.
 
@@ -370,6 +559,25 @@ ON CONFLICT (id) DO NOTHING;
 ```
 
 ```sql
+-- 000003_add_transactions_updated_at.up.sql
+
+ALTER TABLE transactions
+    ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+UPDATE transactions SET updated_at = created_at;  -- backfill existing rows
+
+CREATE INDEX idx_transactions_user_updated_at
+    ON transactions(user_id, updated_at ASC);
+```
+
+```sql
+-- 000004_add_transactions_currency.up.sql
+
+ALTER TABLE transactions
+    ADD COLUMN currency VARCHAR(10) NOT NULL DEFAULT 'USD';
+```
+
+```sql
 -- Homegrown migration tracker (created by CI script inline, not a migration file)
 CREATE TABLE IF NOT EXISTS _schema_migrations (
     filename   TEXT        PRIMARY KEY,
@@ -377,7 +585,31 @@ CREATE TABLE IF NOT EXISTS _schema_migrations (
 );
 ```
 
-### 4.2 Key Constraints Explained
+### 6.2 Full Transaction Schema (Post All Migrations)
+
+```sql
+transactions (
+    id          UUID           PRIMARY KEY,
+    user_id     BIGINT         NOT NULL REFERENCES users(tg_id) ON DELETE CASCADE,
+    category_id UUID           NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+    amount      DECIMAL(18, 2) NOT NULL CHECK (amount > 0),
+    created_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    is_deleted  BOOLEAN        NOT NULL DEFAULT FALSE,
+    updated_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW(),   -- migration 000003
+    currency    VARCHAR(10)    NOT NULL DEFAULT 'USD'    -- migration 000004
+)
+```
+
+**Indexes on `transactions`:**
+
+| Index | Columns | Condition | Used by |
+|---|---|---|---|
+| `idx_transactions_user_id` | `(user_id)` | — | General user scoping |
+| `idx_transactions_created_at` | `(created_at DESC)` | — | Sort-only queries |
+| `idx_transactions_user_timeline` | `(user_id, created_at DESC)` | `WHERE is_deleted = FALSE` | `GetTimelineWithCursor` (cursor pagination) |
+| `idx_transactions_user_updated_at` | `(user_id, updated_at ASC)` | — | `GetTransactionsDelta` (delta sync) |
+
+### 6.3 Key Constraints Explained
 
 | Constraint | Table | Purpose |
 |---|---|---|
@@ -389,15 +621,17 @@ CREATE TABLE IF NOT EXISTS _schema_migrations (
 | `CHECK (daily/weekly/monthly_limit >= 0)` | budgets | Limits can be zero (disabled) but not negative |
 | `TIMESTAMPTZ` | all date columns | Stored as UTC; no timezone-aware confusion |
 
-### 4.3 Query Notes
+### 6.4 Query Notes
 
-- `GetCategoriesByUserId`: `WHERE user_id = $1 OR is_system = true ORDER BY sort_order ASC` — every user sees the 8 system categories regardless of their own `user_id`.
-- ~~`GetAnalyticsDonut`~~: aggregates current calendar month using `DATE_TRUNC('month', NOW())` on the server — month boundary is server-local timezone (UTC if `TZ` env var is not set). **[UNUSED]** — frontend switched to `computeLocalDonutData()` (client-side); see §7.
+- `GetCategoriesByUserId`: `WHERE user_id = $1 OR is_system = true ORDER BY sort_order ASC` — every user sees all 8 system categories regardless of their own `user_id`.
 - `UpsertUser`: `ON CONFLICT (tg_id) DO UPDATE SET updated_at = NOW()` — acts as a login ping; updates `updated_at` on every bootstrap call.
+- `UpsertTransaction`: `ON CONFLICT (id) DO UPDATE SET ... updated_at = NOW()` — `updated_at` is always server-assigned at upsert time, never client-supplied. This is what `GetTransactionsDelta` tracks to identify changed records.
+- `GetTransactionsDelta`: `WHERE user_id = $1 AND updated_at > $2 ORDER BY updated_at ASC` — returns all records including soft-deleted ones; `ASC` ordering ensures client can safely advance `last_synced_at` to the last item's `updated_at`.
+- ~~`GetAnalyticsDonut`~~: aggregates current calendar month using `DATE_TRUNC('month', NOW())` on the server. **[UNUSED]** — frontend switched to `computeLocalDonutData()` (client-side); see §5.3.
 
 ---
 
-## 5. Project Map
+## 7. Project Map
 
 ```
 FlowMoney-app/
@@ -407,11 +641,11 @@ FlowMoney-app/
 ├── internal/
 │   ├── config/config.go         Reads env vars; mustEnv() panics on missing required vars
 │   ├── delivery/http/
-│   │   ├── middleware.go        TelegramAuth middleware: HMAC verify → inject telegram_id into ctx
+│   │   ├── middleware.go        TelegramAuth middleware: HMAC verify + auth_date expiry → inject telegram_id
 │   │   ├── bootstrap.go        GET /bootstrap: UpsertUser + GetBudget + GetCategories + rates
-│   │   ├── sync.go             POST /sync: DB transaction wrapping batch UpsertTransaction
+│   │   ├── sync.go             POST /sync: 1 MB cap; DB transaction wrapping batch UpsertTransaction
 │   │   ├── settings.go         PUT /settings: UpdateUserCurrency + UpsertBudget
-│   │   └── analytics.go        GET /analytics/donut + GET /analytics/timeline (cursor pagination)
+│   │   └── analytics.go        GET /analytics/timeline: ?since= (delta) or ?cursor= (cursor pagination)
 │   ├── repository/postgres/
 │   │   ├── db.go               sqlc-generated: DBTX interface (Pool or Tx)
 │   │   ├── models.go           sqlc-generated: User, Category, Transaction, Budget structs
@@ -423,12 +657,14 @@ FlowMoney-app/
 │       └── rates.go            RatesManager: in-memory exchange rates, 12 h refresh from open.er-api.com
 │
 ├── pkg/tgauth/
-│   ├── tgauth.go               VerifyInitData: pure HMAC-SHA256 verification, no external deps
-│   └── tgauth_test.go          Unit tests for VerifyInitData
+│   ├── tgauth.go               VerifyInitData: HMAC-SHA256 + auth_date expiry (ErrExpired)
+│   └── tgauth_test.go          Unit tests: TestVerifyInitData_Expired and happy paths
 │
 ├── migrations/
-│   ├── 000001_init_schema.up.sql    Creates users, categories, transactions, budgets + indexes
-│   └── 000002_seed_system_categories.up.sql  Seeds system user (tg_id=0) and 8 system categories
+│   ├── 000001_init_schema.up.sql                  users, categories, transactions, budgets + indexes
+│   ├── 000002_seed_system_categories.up.sql       system user (tg_id=0) and 8 system categories
+│   ├── 000003_add_transactions_updated_at.up.sql  updated_at column + idx_transactions_user_updated_at
+│   └── 000004_add_transactions_currency.up.sql    currency column on transactions
 │
 ├── frontend/
 │   ├── index.html              Single HTML shell; skeleton loader, three screen divs, bottom nav
@@ -438,11 +674,12 @@ FlowMoney-app/
 │       │                       State: analyticsPeriod ('day'|'month'|'custom'),
 │       │                       analyticsRange ({start, end} — Unix-таймстампы в мс)
 │       ├── storage.js          StorageManager: localStorage r/w; UUID migration; soft-delete;
-│       │                       bulkLoad(items) — одноразовый initial pull с сервера
-│       ├── sync.js             SyncRunner: 15 s interval + online event; _isSyncing mutex flag
-│       ├── settings.js         Settings: currency/limit controls; debounced server sync (1500 ms); converter widget
-│       ├── app.js              App entry: Telegram SDK init, Theme, Router, NumPad, CategoryCarousel, bindings
-│       ├── charts.js           DonutChart: SVG donut + timeline DOM builder; _esc() XSS guard
+│       │                       bulkLoad(), mergeFromServer(), getLastSyncedAt()
+│       ├── sync.js             SyncRunner: 15 s interval + online event; _isSyncing mutex; _push/_pull
+│       ├── settings.js         Settings: currency/limit controls; debounced server sync (1500 ms); converter
+│       ├── app.js              App entry: Telegram SDK init, Theme, Router, NumPad, CategoryCarousel,
+│       │                       computeLocalDonutData(), updateAnalyticsRange(), CalendarSheet, bindings
+│       ├── charts.js           DonutChart: SVG donut + legend + refreshCurrencyLabels(); timeline DOM
 │       └── gestures.js         SwipeGesture: pointer-based left/right swipe on timeline items
 │
 ├── .github/workflows/deploy.yml    CI: SSH to VPS → git pull → docker compose up --build → migrations
@@ -455,9 +692,9 @@ FlowMoney-app/
 
 ---
 
-## 6. Security Standards & Debt
+## 8. Security Standards & Debt
 
-### 6.1 DB Error Masking
+### 8.1 DB Error Masking
 
 All handler functions return only `"internal server error"` to the client on DB failures:
 
@@ -466,32 +703,36 @@ All handler functions return only `"internal server error"` to the client on DB 
 http.Error(w, "internal server error", http.StatusInternalServerError)
 ```
 
-Raw pgx errors (e.g., `pgx: no rows in result set`, constraint violation messages) are **never forwarded** to the client. They are absorbed silently; the chi `middleware.Logger` logs the HTTP exchange but not the error bodies.
+Raw pgx errors are **never forwarded** to the client. The chi `middleware.Logger` logs the HTTP exchange. The sync handler additionally logs `log.Printf("SYNC ERROR: ...")` before returning 500.
 
-**Partial exception:** `middleware.go` returns `"bad request: " + err.Error()` for parsing failures. The errors exposed are from the `tgauth` package (`"tgauth: hash field is missing from initData"`) and from `url.ParseQuery` — not from pgx. These do not expose DB internals.
+**Partial exception:** `middleware.go` returns `"bad request: " + err.Error()` for parsing failures. The exposed errors originate from the `tgauth` package (`"tgauth: hash field is missing from initData"`) and from `url.ParseQuery` — not from pgx. DB internals are never exposed.
 
-### 6.2 XSS Protection Standards
+### 8.2 XSS Protection Standards
 
 **Safe pattern — timeline renderer (`charts.js`):**
 
 ```js
 // All user-visible data via textContent — HTML injection impossible
 const nameEl = document.createElement('div');
-nameEl.textContent = categoryName;  // safe regardless of content
+nameEl.textContent = categoryName;
 
 const iconEl = document.createElement('div');
 iconEl.textContent = categoryIcon;  // emoji injected as text, not markup
 ```
 
 The entire timeline DOM tree is built with `createElement` + `textContent`. Two `innerHTML` assignments in `charts.js` are safe:
-1. SVG donut and legend — guarded by `_esc()` which escapes `&`, `<`, `>`, `"` before injection.
+1. SVG donut structure — guarded by `_esc()` which escapes `&`, `<`, `>`, `"` before injection.
 2. Swipe-delete overlay — static hardcoded SVG markup; zero user data.
 
-**~~Vulnerable pattern — `CategoryCarousel.render()` in `app.js`~~ ✅ FIXED 2026-06-30:**
+**`CategoryCarousel.render()` in `app.js` ✅ FIXED 2026-06-30:**
 
-`CategoryCarousel.render()` was rewritten to use `createElement` + `textContent` + DOM style properties. No `innerHTML` or template literals remain. Safe for user-defined categories.
+Rewritten to use `createElement` + `textContent` + DOM style properties. No `innerHTML` or template literals remain. Stored XSS–safe for user-defined categories.
 
-### 6.3 NumPad Input Limits
+**`CalendarSheet.renderGrid()` in `app.js`:**
+
+Day numbers rendered via `document.createTextNode(String(day))` — HTML parsing excluded, markup injection impossible.
+
+### 8.3 NumPad Input Limits
 
 | Limit | Numpad (home screen) | Budget modal (settings) |
 |---|---|---|
@@ -502,7 +743,7 @@ The entire timeline DOM tree is built with `createElement` + `textContent`. Two 
 
 The DB `CHECK (amount > 0)` is the only server-side amount guard; there is no server-side upper-bound validation.
 
-### 6.4 Key Timings
+### 8.4 Key Timings
 
 | Behavior | Value |
 |---|---|
@@ -516,9 +757,7 @@ The DB `CHECK (amount > 0)` is the only server-side amount guard; there is no se
 | RatesManager refresh interval | 12 h |
 | RatesManager HTTP timeout | 10 s |
 
-> **Безопасность кастомного ввода дат:** Кастомные диапазоны хранятся в `Store.state.analyticsRange` исключительно как числа (Unix-мс). Рендеринг чисел дней в сетке `#calendar-grid` выполняется через `document.createTextNode(String(day))` — HTML-парсинг исключён, инъекция разметки невозможна (защита от XSS в соответствии с §6.2).
-
-### 6.5 Server Timeouts
+### 8.5 Server Timeouts
 
 | Timeout | Value |
 |---|---|
@@ -530,7 +769,7 @@ The DB `CHECK (amount > 0)` is the only server-side amount guard; there is no se
 
 ---
 
-## 7. Hidden Architectural Weaknesses & Risks
+## 9. Hidden Architectural Weaknesses & Risks
 
 ### ~~Risk 1 — `auth_date` Not Validated → Replay Attack (CRITICAL)~~ ✅ FIXED 2026-06-30
 
@@ -540,107 +779,46 @@ The DB `CHECK (amount > 0)` is the only server-side amount guard; there is no se
 
 ### ~~Risk 2 — Sync Payload Format Mismatch → Data Never Reaches PostgreSQL (CRITICAL)~~ ✅ FIXED 2026-06-30
 
-`internal/delivery/http/sync.go` now decodes the request body into a `syncRequest` wrapper struct:
-
-```go
-type syncRequest struct {
-    Transactions []syncTransaction `json:"transactions"`
-}
-```
-
-This matches the `{"transactions":[...]}` envelope the frontend has always sent. The ACID transaction logic is unchanged. Transactions now correctly reach PostgreSQL.
+`internal/delivery/http/sync.go` decodes the request body into a `syncRequest` struct (`json:"transactions"`), matching the `{"transactions":[...]}` envelope the frontend sends. The ACID transaction logic is unchanged.
 
 ---
 
 ### ~~Risk 3 — Unbounded Sync Batch Size (MEDIUM)~~ ✅ FIXED 2026-06-30
 
-`internal/delivery/http/sync.go` now applies `http.MaxBytesReader(w, r.Body, 1<<20)` before JSON decoding. Payloads exceeding 1 MB are rejected with HTTP 400 `"request body too large"` before any parsing or DB work occurs.
+`internal/delivery/http/sync.go` applies `http.MaxBytesReader(w, r.Body, 1<<20)` before JSON decoding. Payloads exceeding 1 MB are rejected with HTTP 400 `"request body too large"` before any parsing or DB work occurs.
 
 ---
 
-### ~~Risk 4 — CategoryCarousel XSS Surface for User-Defined Categories (MEDIUM, latent)~~ ✅ FIXED 2026-06-30
+### ~~Risk 4 — CategoryCarousel XSS Surface for User-Defined Categories (MEDIUM)~~ ✅ FIXED 2026-06-30
 
-`CategoryCarousel.render()` in `app.js` has been fully rewritten to use `document.createElement` + `textContent`. No `innerHTML` or template literals remain. `cat.icon` and `cat.name` are injected via `textContent`; `cat.color` is applied via `element.style.background` and `element.style.color` (DOM property assignment — not HTML parsing). The container is cleared with `carousel.textContent = ''`. The function is now Stored XSS–safe for user-defined categories.
+`CategoryCarousel.render()` in `app.js` fully rewritten to use `document.createElement` + `textContent`. No `innerHTML` or template literals remain.
 
 ---
 
 ### ~~Risk 5 — Homegrown Migration Tracker Without Atomic Rollback (LOW)~~ ✅ FIXED 2026-06-30
 
-`.github/workflows/deploy.yml` now pipes migration SQL together with the `INSERT INTO _schema_migrations` into a single `psql` invocation using `-v ON_ERROR_STOP=1`. Both the DDL and the tracker insert execute in the same implicit transaction; if any statement fails, `psql` aborts and the migration is not marked as applied — preventing double-application on the next deploy.
+`.github/workflows/deploy.yml` now pipes migration SQL together with the `INSERT INTO _schema_migrations` into a single `psql -v ON_ERROR_STOP=1` invocation. Both the DDL and the tracker insert execute in the same implicit transaction; failure aborts without marking the migration as applied.
 
 ---
 
-### ~~Risk 6 — RatesManager Depends on Unauthenticated Free-Tier External API (LOW)~~ ✅ FIXED 2026-06-30
+### ~~Risk 6 — RatesManager Depends on Unauthenticated Free-Tier External API (LOW)~~ ✅ MITIGATED 2026-06-30
 
-`service/rates.go` fetches `https://open.er-api.com/v6/latest/USD` with no API key. At a 12-hour interval, a single instance consumes ~60 requests/month against the 1 500/month free tier — safe for the current scale.
-
-On any fetch failure (network error, rate limit, API change, decode error), the manager now logs a `[RATES WARN]` message and retains the last known in-memory rates. Fallback rates updated to mid-2026 values: `USD=1.0, RUB=93.50, GEL=2.72, EUR=0.92`.
+~60 req/month at 12h interval against the 1 500/month free tier — safe for current scale. On any fetch failure, last known rates are retained (logged as `[RATES WARN]`).
 
 ---
 
 ### ~~Risk 7 — Donut Chart: Cross-Currency Aggregation Bug + UX Deficiencies (MEDIUM)~~ ✅ FIXED 2026-06-30
 
-**Root cause (math):** The former `GET /api/v1/analytics/donut` grouped raw transaction amounts server-side without currency conversion — totals were sums of amounts in different currencies. Additionally, `DATE_TRUNC('month', NOW())` used the server's UTC timezone, producing month-boundary mismatches for users in non-UTC locales.
-
-**Fix — `computeLocalDonutData()` (`app.js:420`):**
-
-All aggregation is now client-side (Offline-First). Each transaction is converted to the current app currency **exactly once**, before being added to its category bucket:
-
-```js
-amountInAppCurrency = (amount / rates[txCurrency]) * rates[currentAppCurrency]
-```
-
-The conversion is skipped when `txCurrency === Store.state.currency` (amounts already in app currency). Month boundary is evaluated using the user's local clock via `new Date().getFullYear()` / `.getMonth()` — no server timezone dependency. Only non-deleted (`!tx.is_deleted`) transactions within the current local calendar month are included. Per-category accumulated totals are emitted as `Number(groups[catId].toFixed(2))`.
-
-**Fix — Donut UX (`charts.js`):**
-
-- **SVG size:** `<svg class="donut-svg">` dimensions set to `width="100%" height="100%"` — the chart expands to the full width of its container element for improved readability on all screen sizes.
-- **Center amount:** Rendered as `centerAmt.toFixed(2) + ' ' + currencySymbol` (e.g., `"12345.67 ₽"`). `centerAmt` equals `totalAll` — the sum of all category totals (`_lastData.reduce((s, d) => s + d.total, 0)`) — when no segment is selected; switches to the tapped segment's own `total` on category focus. Set via `svgTexts[1].textContent` — no HTML injection.
-- **Legend amounts:** Replaced from percentage shares to absolute formatted values via `_fmtLegendAmt(item.total, currency)`. The helper uses `Number(amount).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })` and appends the currency symbol string. Injected via `amtEl.textContent` — XSS-safe.
-
-**Апдейт 2026-06-30 — Аналитика произвольных интервалов:**
-- Логика `computeLocalDonutData()` расширена: жесткая фильтрация по текущему месяцу заменена на динамический диапазон. Фильтрация идет по условию `txTime >= start && txTime <= end`.
-- Для реактивного стейта `Store.state.analyticsRange` использованы Unix-таймстампы (числа в мс) вместо объектов `Date`. Это предотвращает поломку внутренних механизмов JS-движка (`[[DateValue]]`) при рекурсивном оборачивании объектов в `Proxy`.
-- Переключение периодов (`'day' | 'month'`) реализовано через делегирование pointerdown-событий на контейнере `.analytics-period-switcher`. Стили наследуют переменные Telegram-темы (`--accent-color`, `--hint-color`).
+Aggregation moved client-side to `computeLocalDonutData()`. Cross-rate conversion applied per transaction before category bucketing. Month boundary uses client local clock. See §5.3.
 
 ---
 
-### ~~Risk 8 — Аналитика произвольных интервалов и кастомный UX календаря~~ ✅ FIXED 2026-06-30
+### ~~Risk 8 — Proxy Date Objects in `Store.state.analyticsRange` (MEDIUM)~~ ✅ FIXED 2026-06-30
 
-**Проблема:** Жёсткая фильтрация пончика по текущему календарному месяцу (серверный `DATE_TRUNC`) делала выборку данных негибкой. Нативные `<input type="date">` вызывают системную клавиатуру устройства — неприемлемо в Telegram Mini App.
+`Store.state.analyticsRange` stores `{ start: number, end: number }` in Unix-ms — primitive numbers, not `Date` objects. The reactive Proxy in `store.js` wraps nested objects in new Proxy instances, which destroys the non-transferable `[[DateValue]]` internal slot of `Date`. Primitive numbers are unaffected. CalendarSheet provides keyboard-free date input using `createTextNode` for XSS safety. See §2.7 and §5.3.
 
-**Решения:**
+---
 
-**1. Динамический диапазон в `computeLocalDonutData()` (`app.js`):**
+### ~~Risk 9 — Debug Code in `refreshCurrencyLabels()` (LOW)~~ ✅ FIXED 2026-06-30
 
-Жёсткая месячная граница заменена на фильтрацию по `Store.state.analyticsRange`:
-
-```js
-const txTime = new Date(tx.created_at).getTime();
-return txTime >= start && txTime <= end;
-```
-
-Диапазон пересчитывается функцией `updateAnalyticsRange()` при смене `analyticsPeriod` (`'day'` | `'month'`). При `period === 'custom'` функция выполняет **ранний возврат** (`if (period === 'custom') return`), защищая пользовательский диапазон от перезаписи дефолтными месячными расчётами при срабатывании Store-подписок или повторном вызове.
-
-**2. Unix-таймстампы в `Store.state.analyticsRange` вместо `Date`-объектов:**
-
-`Store.state.analyticsRange` хранит `{ start: number, end: number }` в мс с начала эпохи. Это архитектурное решение предотвращает поломку внутренних слотов JS-движка (`[[DateValue]]`): рекурсивный Proxy в `store.js` оборачивает любой вложенный объект в новый `Proxy`-обёртку, что разрушает непередаваемые внутренние слоты `Date`. Примитивные числа Proxy-оборачиванием не затрагиваются.
-
-**3. Кастомный `CalendarSheet` (§2.7) вместо нативных `<input type="date">`:**
-
-Bottom Sheet генерирует сетку дней нативными средствами Vanilla JS без системной клавиатуры. Числа дней рендерятся через `document.createTextNode` — XSS-безопасно (§6.2). Переключение периодов делегировано `pointerdown` на `.analytics-period-switcher`; при `'custom'` отображается `#custom-date-picker` с двумя триггер-кнопками (`#calendar-start-trigger`, `#calendar-end-trigger`). Рендер пончика триггерится реактивно через Store-подписки на `analyticsRange` и `analyticsPeriod`.
-
-**4. Механика Initial Pull (`initialPull()` в `app.js` + `StorageManager.bulkLoad()` в `storage.js`):**
-
-При старте приложения на новом устройстве (или после очистки браузера) `localStorage` пуст. После `hideSkeleton()` вызывается асинхронная `initialPull()`:
-
-```js
-// app.js — условие запуска
-if (localTxs.length !== 0 || !Store.state.isOnline) return;
-
-// Неблокирующий запрос истории (максимум 200 транзакций)
-const response = await fetch('/api/v1/analytics/timeline?limit=200', { ... });
-StorageManager.bulkLoad(data.items);
-```
-
-`StorageManager.bulkLoad(items)` (`storage.js`) принимает транзакции из API, проставляет им `synced: true, _pending: false` и сохраняет в localStorage, после чего реактивно обновляет `Store.state.transactions`. Вызов защищён guard'ом `if (_transactions.length > 0) return` — повторная загрузка при непустом хранилище невозможна. `initialPull()` не блокирует UI: вызывается после `hideSkeleton()` без `await` в родительском `init()`.
+`charts.js` → `refreshCurrencyLabels()` debug block removed. Center label now uses the same production logic as `renderDonutChart()` to resolve category name from `Store.state.categories` with fallback to transaction name or `'Месяц'`, maintaining the 12-character slice limit.

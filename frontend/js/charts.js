@@ -337,10 +337,14 @@ const DonutChart = (() => {
 
     const svgTexts = container.querySelectorAll('.donut-svg text');
     if (svgTexts[0]) {
-      // DEBUG: show freshData summary in center label so we can verify on device.
-      // Remove after confirming conversion works.
-      const dbg = _lastData.map(d => d.category_id.slice(0,4) + ':' + d.total.toFixed(0)).join(' ');
-      svgTexts[0].textContent = cur + ' ' + dbg;
+      const focused    = _selectedCatId ? _lastData.find(d => d.category_id === _selectedCatId) : null;
+      const focusedCat = focused
+        ? (Store.state.categories || []).find(c => String(c.id) === String(focused.category_id))
+        : null;
+      const centerLabel = focusedCat
+        ? focusedCat.name.slice(0, 12)
+        : (focused ? (focused.name || '').slice(0, 12) : 'Месяц');
+      svgTexts[0].textContent = centerLabel;
     }
     if (svgTexts[1]) {
       const focused   = _selectedCatId ? _lastData.find(d => d.category_id === _selectedCatId) : null;
