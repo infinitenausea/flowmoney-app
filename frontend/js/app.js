@@ -470,11 +470,17 @@ const CategoryCarousel = (() => {
 
     // Preserve selected category across re-renders
     const prevSelectedId = Store.state.selectedCategory;
+    const nonDeletedCategories = categories.filter(cat => !cat.is_deleted);
+
+    // If previously selected category was deleted, clear the selection
+    if (prevSelectedId && !nonDeletedCategories.some(cat => cat.id === prevSelectedId)) {
+      Store.state.selectedCategory = null;
+    }
 
     carousel.textContent = '';
 
     const fragment = document.createDocumentFragment();
-    categories.filter(cat => !cat.is_deleted).forEach(cat => {
+    nonDeletedCategories.forEach(cat => {
       const item = document.createElement('div');
       item.className = 'category-item';
       item.setAttribute('role', 'option');
@@ -1237,13 +1243,6 @@ async function bootstrap() {
     if (Store.state.currentTab === 'analytics') {
       loadAnalyticsData();
     }
-
-    // DEBUG: phantom categories probe — moved here to show post-merge state
-    (function() {
-      const serverCount = (data.categories || []).length;
-      const localCount = JSON.parse(localStorage.getItem('flowmoney_user_categories') || '[]').length;
-      document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;top:10px;left:10px;background:black;color:lime;z-index:99999;padding:10px;font-family:monospace;">SERVER: ${serverCount} | LOCAL: ${localCount}</div>`);
-    })();
 
   } catch (err) {
     // Offline-first: не блокируем UI, работаем с локальным состоянием
