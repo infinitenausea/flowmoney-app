@@ -853,21 +853,25 @@ button {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 130px;
+  width: 70px;
   background: var(--success-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  padding-left: var(--spacing-md);
   color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
   opacity: 0;
   transform: translateX(-40%) scale(0.85);
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.swipe-action-duplicate .swipe-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
 }
 
 /* Pinned-open state after a committed left-swipe past DELETE_THRESHOLD.
