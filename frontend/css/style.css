@@ -339,7 +339,7 @@ button {
 
 .budget-widget {
   text-align: center;
-  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-sm);
+  padding: 4px var(--spacing-md) var(--spacing-sm);
 }
 
 .budget-period-toggle {
@@ -347,7 +347,7 @@ button {
   background: var(--secondary-bg-color);
   border-radius: var(--radius-full);
   padding: 4px;
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: 4px;
   gap: 4px;
 }
 
