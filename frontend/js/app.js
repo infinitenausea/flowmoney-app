@@ -444,15 +444,18 @@ const CategoryCreationSheet = (() => {
       });
       grid.appendChild(frag);
 
+      // passive: true — this listener sits inside .cat-sheet-scroll; calling
+      // preventDefault() on pointerdown here (as before) cancels WebKit's touch
+      // default action the same way touchstart would, killing native scroll
+      // whenever a drag starts on top of a grid cell.
       grid.addEventListener('pointerdown', (e) => {
         const opt = e.target.closest('.cat-emoji-option');
         if (!opt) return;
-        e.preventDefault();
         tg?.HapticFeedback?.impactOccurred('light');
         _emoji = opt.dataset.emoji;
         _updatePreview();
         _syncEmojiGrid();
-      });
+      }, { passive: true });
     }
 
     // Build color palette via createElement (XSS-safe; values are hardcoded)
@@ -460,15 +463,16 @@ const CategoryCreationSheet = (() => {
     if (palette) {
       _renderColorPalette();
 
+      // Same passive fix as the emoji grid above — this also lives inside
+      // .cat-sheet-scroll and must not cancel the native scroll gesture.
       palette.addEventListener('pointerdown', (e) => {
         const swatch = e.target.closest('.cat-color-swatch');
         if (!swatch || swatch.classList.contains('disabled')) return;
-        e.preventDefault();
         tg?.HapticFeedback?.impactOccurred('light');
         _color = swatch.dataset.color;
         _updatePreview();
         _renderColorPalette();
-      });
+      }, { passive: true });
     }
   }
 
@@ -622,7 +626,6 @@ const CategoryCarousel = (() => {
           if (Store.state.isReorderingMode) return;
           if (e.target.closest('#category-reorder-done-btn')) return;
           if (e.target.closest('.category-add-btn')) {
-            e.preventDefault();
             tg?.HapticFeedback?.impactOccurred('light');
             CategoryCreationSheet.open();
             return;
