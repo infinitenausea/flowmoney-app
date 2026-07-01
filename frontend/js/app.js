@@ -620,6 +620,7 @@ const CategoryCarousel = (() => {
       if (_supportsTouch) {
         carousel.addEventListener('touchstart', (e) => {
           if (Store.state.isReorderingMode) return;
+          if (e.target.closest('#category-reorder-done-btn')) return;
           if (e.target.closest('.category-add-btn')) {
             e.preventDefault();
             tg?.HapticFeedback?.impactOccurred('light');
@@ -652,6 +653,7 @@ const CategoryCarousel = (() => {
       } else {
         carousel.addEventListener('pointerdown', (e) => {
           if (Store.state.isReorderingMode) return;
+          if (e.target.closest('#category-reorder-done-btn')) return;
           if (e.target.closest('.category-add-btn')) {
             e.preventDefault();
             tg?.HapticFeedback?.impactOccurred('light');
@@ -733,6 +735,9 @@ const CategoryCarousel = (() => {
 
       carousel.addEventListener('pointerdown', (e) => {
         if (!Store.state.isReorderingMode) return;
+        // "Готово" живёт вне карусели, но проверяем явно — на случай если
+        // разметка изменится и кнопка окажется внутри делегирующего контейнера.
+        if (e.target.closest('#category-reorder-done-btn')) return;
         const item = e.target.closest('.category-item');
         if (!item) return;
         e.preventDefault();
@@ -759,12 +764,20 @@ const CategoryCarousel = (() => {
 
     const doneBtn = document.getElementById('category-reorder-done-btn');
     if (doneBtn) doneBtn.addEventListener('pointerdown', (e) => {
+      // stopPropagation гарантирует, что тап не будет перехвачен слоем
+      // делегированных pointerdown-слушателей карусели (drag/selection).
+      e.stopPropagation();
       e.preventDefault();
       tg?.HapticFeedback?.impactOccurred('light');
 
-      const orderedIds = Array.from(
-        document.querySelectorAll('#category-carousel .category-item')
-      ).map(el => el.dataset.id);
+      const items = document.querySelectorAll('#category-carousel .category-item');
+      const orderedIds = [];
+      for (const item of items) {
+        const id = item.dataset.id;
+        if (!id) continue; // Пропускаем служебные элементы без ID (напр. "Ещё")
+        orderedIds.push(id);
+      }
+
       StorageManager.reorderCategories(orderedIds);
       SyncRunner.syncWithBackend();
 
