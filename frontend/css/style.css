@@ -1747,7 +1747,11 @@ input[type="range"]::-moz-range-thumb {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  /* Claim the vertical drag for this container so the WebView doesn't
+     hand it to the body scroll underneath before we get a chance to. */
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
   overscroll-behavior-y: contain !important;
 }
 
