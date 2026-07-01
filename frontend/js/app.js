@@ -474,6 +474,42 @@ const CategoryCreationSheet = (() => {
         _renderColorPalette();
       }, { passive: true });
     }
+
+    _initScrollBoundaryLock();
+  }
+
+  // Boundary scroll lock: stops scroll-chaining from .cat-sheet-scroll to the
+  // WebView body. overscroll-behavior: contain (style.css) already covers this
+  // on modern WebKit; this is a JS fallback for engines that ignore it.
+  function _initScrollBoundaryLock() {
+    const scrollEl = sheet.querySelector('.cat-sheet-scroll');
+    if (!scrollEl) return;
+
+    let _touchStartY = 0;
+    let _maxScroll = 0;
+
+    scrollEl.addEventListener('touchstart', (e) => {
+      _touchStartY = e.touches[0].clientY;
+      _maxScroll = scrollEl.scrollHeight - scrollEl.offsetHeight;
+
+      // Nudge off the true edge so WebKit doesn't hand the gesture to the body.
+      if (scrollEl.scrollTop <= 0) {
+        scrollEl.scrollTop = 1;
+      } else if (scrollEl.scrollTop >= _maxScroll) {
+        scrollEl.scrollTop = _maxScroll - 1;
+      }
+    }, { passive: true });
+
+    scrollEl.addEventListener('touchmove', (e) => {
+      const deltaY = e.touches[0].clientY - _touchStartY;
+      const top = scrollEl.scrollTop;
+
+      // Pulling down while already pinned at the top, or pushing up while
+      // pinned at the bottom, would otherwise rubber-band the whole app.
+      if ((deltaY > 0 && top <= 0) || (deltaY < 0 && top >= _maxScroll)) {
+        e.preventDefault();
+      }
+    }, { passive: false });
   }
 
   return { init, open, close };
