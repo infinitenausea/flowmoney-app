@@ -1382,8 +1382,6 @@ input[type="range"]::-moz-range-thumb {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 100% !important;
-  min-width: 100% !important;
   box-sizing: border-box !important;
   height: 52px !important;
   min-height: 52px !important;
@@ -1394,6 +1392,18 @@ input[type="range"]::-moz-range-thumb {
   line-height: 1 !important;
   text-transform: none !important;
   letter-spacing: normal !important;
+
+  /* .bottom-sheet-panel has 0 horizontal padding (unlike .screen-content's 16px),
+     so inset the buttons ourselves to match .btn-add's 16px side clearance. */
+  width: calc(100% - 32px) !important;
+  min-width: calc(100% - 32px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  margin-bottom: var(--spacing-sm, 8px) !important;
+}
+
+#cat-sheet-confirm {
+  margin-bottom: 0 !important;
 }
 
 /* ═══════════════════════════════════════════════════
