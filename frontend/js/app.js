@@ -195,6 +195,12 @@ const NumPad = (() => {
 
       e.preventDefault();
 
+      // Скрываем клавиатуру, если фокус был в поле комментария
+      const commentInputEl = document.getElementById('tx-comment-input');
+      if (commentInputEl && document.activeElement === commentInputEl) {
+        commentInputEl.blur();
+      }
+
       // Визуальная обратная связь
       key.classList.add('pressed');
       setTimeout(() => key.classList.remove('pressed'), 120);
@@ -495,7 +501,6 @@ const CategoryCarousel = (() => {
       const iconEl = document.createElement('div');
       iconEl.className = 'category-icon';
       iconEl.style.background = cat.color + '22';
-      iconEl.style.color = cat.color;
       iconEl.textContent = cat.icon;
 
       const nameEl = document.createElement('span');
@@ -792,6 +797,13 @@ function initBindings() {
     });
   }
 
+  // Скрываем нативную клавиатуру по Enter
+  const commentInputEl = document.getElementById('tx-comment-input');
+  if (commentInputEl) {
+    commentInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.keyCode === 13) commentInputEl.blur();
+    });
+  }
 }
 
 /* ═══════════════════════════════════════════════════
