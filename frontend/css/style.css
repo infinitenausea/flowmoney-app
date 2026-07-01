@@ -249,10 +249,22 @@ button {
 }
 
 .analytics-sticky-header {
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   background-color: var(--bg-color);
-  z-index: 10;
+}
+
+/* Analytics runs its own internal flex layout: header stays put,
+   only the transaction list underneath scrolls. */
+#screen-analytics {
+  overflow-y: hidden;
+}
+
+#screen-analytics .screen-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px 16px 0;
+  overflow: hidden;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -836,6 +848,11 @@ button {
 .timeline {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--nav-bottom-pad);
 }
 
 .timeline-empty {
@@ -888,7 +905,7 @@ button {
   position: absolute;
   right: 0;
   top: 0;
-  bottom: 0;
+  height: 52px;
   width: 70px;
   background: var(--danger-color);
   display: flex;
@@ -911,7 +928,7 @@ button {
   position: absolute;
   left: 0;
   top: 0;
-  bottom: 0;
+  height: 52px;
   width: 70px;
   background: var(--success-color);
   display: flex;
@@ -1491,6 +1508,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--text-color) 20%, transparent);
   margin: 0 auto 8px;
+  flex-shrink: 0;
 }
 
 .bottom-sheet-options {
@@ -1628,9 +1646,17 @@ input[type="range"]::-moz-range-thumb {
 ═══════════════════════════════════════════════════ */
 
 .bottom-sheet-panel--scroll {
+  display: flex;
+  flex-direction: column;
+  height: max-content;
+  max-height: 90vh;
+}
+
+.cat-sheet-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 88vh;
-  padding-bottom: calc(var(--spacing-lg) * 2 + var(--nav-bottom-pad, 8px));
+  -webkit-overflow-scrolling: touch;
 }
 
 .cat-sheet-header {
@@ -1638,6 +1664,7 @@ input[type="range"]::-moz-range-thumb {
   align-items: center;
   justify-content: space-between;
   padding: 4px 16px 14px;
+  flex-shrink: 0;
 }
 
 .cat-sheet-title {
@@ -1650,6 +1677,7 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   justify-content: center;
   padding: 0 16px 16px;
+  flex-shrink: 0;
 }
 
 .cat-sheet-preview-icon {
@@ -1668,6 +1696,7 @@ input[type="range"]::-moz-range-thumb {
 
 .cat-sheet-field {
   padding: 0 16px 14px;
+  flex-shrink: 0;
 }
 
 .cat-sheet-input {
@@ -1799,8 +1828,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .cat-sheet-confirm {
-  margin: 0 16px;
+  position: relative;
+  margin: auto 16px 0;
   width: calc(100% - 32px);
+  flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════════════════

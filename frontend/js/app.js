@@ -258,6 +258,8 @@ const CategoryCreationSheet = (() => {
     '🏠', '💡', '🛒', '☕',
     // Food & Shopping
     '🍺', '🛍️', '💅', '📦', '🍜', '🐶', '🍽️',
+    // Other
+    '➕', '📱',
   ];
   const COLORS = [
     '#FF6B6B', '#FF8E53', '#FFD93D', '#6BCB77',
