@@ -1370,22 +1370,30 @@ input[type="range"]::-moz-range-thumb {
   background: var(--secondary-bg-color);
 }
 
-/* Геометрический эталон для кнопок шторки редактирования категории —
-   таргетируем по ID, чтобы не затронуть #budget-modal-save (тоже .btn-save-limit) */
+/* Бронебойный оверрайд геометрии кнопок шторки редактирования категории —
+   точная копия размеров кнопки "Добавить" (.btn-add: height 52px, radius-lg, fw 600).
+   Таргетируем по ID/классу самих кнопок (не "#category-creation-sheet button"),
+   чтобы не задеть #cat-sheet-close — маленькую круглую кнопку "✕" в шапке шторки. */
 #category-reorder-btn,
 #category-delete-btn,
+.btn-delete-category,
+.btn-reorder-category,
 #cat-sheet-confirm {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   width: 100% !important;
+  min-width: 100% !important;
   box-sizing: border-box !important;
-  height: 48px !important;
-  padding: 0 var(--spacing-md) !important;
-  border-radius: var(--radius-md) !important;
+  height: 52px !important;
+  min-height: 52px !important;
+  padding: 0 16px !important;
+  border-radius: var(--radius-lg) !important;
   font-size: var(--fs-base) !important;
   font-weight: 600 !important;
   line-height: 1 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
 }
 
 /* ═══════════════════════════════════════════════════
