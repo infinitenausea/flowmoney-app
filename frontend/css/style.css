@@ -1319,12 +1319,14 @@ input[type="range"]::-moz-range-thumb {
 .btn-save-limit,
 .btn-delete-category,
 .btn-reorder-category {
-  width: 100%;
-  height: 52px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 8px;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: 52px !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  margin: 8px 0 0 !important;
+  padding: 0 !important;
   border-radius: var(--radius-lg);
   font-size: var(--fs-base);
   font-weight: 600;
@@ -1335,9 +1337,9 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .btn-save-limit {
-  margin-top: 12px;
-  background: var(--accent-color);
-  color: #ffffff;
+  margin-top: 12px !important;
+  background: var(--accent-color) !important;
+  color: #ffffff !important;
 }
 
 .btn-save-limit:active {
@@ -1886,8 +1888,8 @@ input[type="range"]::-moz-range-thumb {
 
 .cat-sheet-confirm {
   position: relative;
-  margin: auto 16px 0;
-  width: calc(100% - 32px);
+  margin: 8px 0 0 !important;
+  width: 100% !important;
   flex-shrink: 0;
 }
 
