@@ -503,6 +503,7 @@ const CategoryCarousel = (() => {
       const iconEl = document.createElement('div');
       iconEl.className = 'category-icon';
       iconEl.style.background = cat.color + '22';
+      iconEl.style.boxShadow = isSelected ? `0 0 0 2px ${cat.color}` : 'none';
       iconEl.textContent = cat.icon;
 
       const nameEl = document.createElement('span');
@@ -561,10 +562,15 @@ const CategoryCarousel = (() => {
         carousel.querySelectorAll('.category-item.selected').forEach(el => {
           el.classList.remove('selected');
           el.setAttribute('aria-selected', 'false');
+          const prevIcon = el.querySelector('.category-icon');
+          if (prevIcon) prevIcon.style.boxShadow = 'none';
         });
 
         item.classList.add('selected');
         item.setAttribute('aria-selected', 'true');
+        const cat = (Store.state.categories || []).find(c => String(c.id) === item.dataset.id);
+        const icon = item.querySelector('.category-icon');
+        if (icon && cat) icon.style.boxShadow = `0 0 0 2px ${cat.color}`;
         Store.state.selectedCategory = item.dataset.id;
 
         _startX = x;
@@ -837,6 +843,8 @@ function handleAddTransaction() {
   document.querySelectorAll('.category-item.selected').forEach(el => {
     el.classList.remove('selected');
     el.setAttribute('aria-selected', 'false');
+    const icon = el.querySelector('.category-icon');
+    if (icon) icon.style.boxShadow = 'none';
   });
 
   console.info('[App] Transaction saved locally:', tx.id);
