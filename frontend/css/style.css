@@ -248,6 +248,13 @@ button {
   color: var(--text-color);
 }
 
+.analytics-sticky-header {
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-color);
+  z-index: 10;
+}
+
 /* ═══════════════════════════════════════════════════
    Нижняя навигация
    "Правило одной руки" — фиксирована снизу
@@ -326,22 +333,24 @@ button {
 .budget-period-toggle {
   display: inline-flex;
   background: var(--secondary-bg-color);
-  border-radius: var(--radius-md);
-  padding: 3px;
+  border-radius: var(--radius-full);
+  padding: 4px;
   margin-bottom: var(--spacing-sm);
-  gap: 2px;
+  gap: 4px;
 }
 
 .budget-period-option {
-  padding: 4px var(--spacing-md);
-  border-radius: var(--radius-md);
-  font-size: var(--fs-xs);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--hint-color);
   cursor: pointer;
+  text-align: center;
   transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .budget-period-option.active {
@@ -462,6 +471,7 @@ button {
   justify-content: center;
   gap: 6px;
   padding: 16px;
+  margin-bottom: var(--spacing-md);
   min-height: 72px;
   white-space: nowrap;
   overflow: hidden;
@@ -491,6 +501,7 @@ button {
   display: block;
   width: 100%;
   padding: 8px 16px;
+  margin: var(--spacing-md) 0;
   border: none;
   outline: none;
   background: var(--secondary-bg-color);
@@ -580,29 +591,35 @@ button {
 
 .analytics-period-switcher {
   display: flex;
-  gap: 8px;
+  background: var(--secondary-bg-color);
+  border-radius: var(--radius-full);
+  padding: 4px;
+  gap: 4px;
   margin-top: var(--spacing-md);
   margin-bottom: 12px;
 }
 
 .period-btn {
   flex: 1;
-  padding: var(--spacing-sm) 0;
-  border: 1.5px solid var(--hint-color);
-  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: none;
+  border-radius: var(--radius-full);
   background: transparent;
   color: var(--hint-color);
   font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  text-align: center;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
 .period-btn.active {
-  background: var(--accent-color);
-  border-color: var(--accent-color);
-  color: #fff;
+  background: var(--bg-color);
+  color: var(--text-color);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
 .custom-date-picker {
@@ -743,7 +760,7 @@ button {
 }
 
 .donut-container {
-  padding: 8px 0 16px;
+  padding: 4px 0 12px;
 }
 
 .donut-chart-wrap {
@@ -754,8 +771,8 @@ button {
 }
 
 .donut-svg {
-  width: min(260px, calc(100vw - 48px));
-  height: min(260px, calc(100vw - 48px));
+  width: min(300px, calc(100vw - 32px));
+  height: min(300px, calc(100vw - 32px));
   flex-shrink: 0;
   /* Hardware-accelerated layer for smooth segment transitions */
   will-change: transform;
@@ -872,13 +889,12 @@ button {
   right: 0;
   top: 0;
   bottom: 0;
-  width: 130px;
+  width: 70px;
   background: var(--danger-color);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   padding-right: var(--spacing-md);
-  gap: 6px;
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
@@ -911,6 +927,7 @@ button {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
+.swipe-action-delete .swipe-icon,
 .swipe-action-duplicate .swipe-icon {
   width: 22px;
   height: 22px;
@@ -1613,6 +1630,7 @@ input[type="range"]::-moz-range-thumb {
 .bottom-sheet-panel--scroll {
   overflow-y: auto;
   max-height: 88vh;
+  padding-bottom: calc(var(--spacing-lg) * 2 + var(--nav-bottom-pad, 8px));
 }
 
 .cat-sheet-header {

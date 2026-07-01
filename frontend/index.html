@@ -95,24 +95,26 @@
     ═══════════════════════════════════════ -->
     <section id="screen-analytics" class="screen" role="main" aria-hidden="true">
       <div class="screen-content">
-        <h2 class="screen-title">Аналитика</h2>
-        <!-- Donut-чарт и таймлайн — Этап 5 -->
-        <div class="analytics-period-switcher" role="group" aria-label="Период аналитики">
-          <button class="period-btn" data-period="day" aria-pressed="false">День</button>
-          <button class="period-btn active" data-period="month" aria-pressed="true">Месяц</button>
-          <button class="period-btn" data-period="custom" aria-pressed="false">Период</button>
-        </div>
-        <div id="custom-date-picker" class="custom-date-picker" aria-hidden="true">
-          <div id="calendar-start-trigger" class="date-trigger custom-select compact-select" role="button" aria-label="Начало периода">
-            <span id="calendar-start-label">01.06.2026</span>
+        <div class="analytics-sticky-header">
+          <h2 class="screen-title">Аналитика</h2>
+          <!-- Donut-чарт и таймлайн — Этап 5 -->
+          <div class="analytics-period-switcher" role="group" aria-label="Период аналитики">
+            <button class="period-btn" data-period="day" aria-pressed="false">День</button>
+            <button class="period-btn active" data-period="month" aria-pressed="true">Месяц</button>
+            <button class="period-btn" data-period="custom" aria-pressed="false">Период</button>
           </div>
-          <span class="date-range-sep">—</span>
-          <div id="calendar-end-trigger" class="date-trigger custom-select compact-select" role="button" aria-label="Конец периода">
-            <span id="calendar-end-label">30.06.2026</span>
+          <div id="custom-date-picker" class="custom-date-picker" aria-hidden="true">
+            <div id="calendar-start-trigger" class="date-trigger custom-select compact-select" role="button" aria-label="Начало периода">
+              <span id="calendar-start-label">01.06.2026</span>
+            </div>
+            <span class="date-range-sep">—</span>
+            <div id="calendar-end-trigger" class="date-trigger custom-select compact-select" role="button" aria-label="Конец периода">
+              <span id="calendar-end-label">30.06.2026</span>
+            </div>
           </div>
-        </div>
-        <div id="donut-container" class="donut-container">
-          <canvas id="donut-canvas" aria-label="Расходы по категориям"></canvas>
+          <div id="donut-container" class="donut-container">
+            <canvas id="donut-canvas" aria-label="Расходы по категориям"></canvas>
+          </div>
         </div>
         <div id="timeline" class="timeline" role="list">
           <!-- Транзакции рендерятся через JS -->
