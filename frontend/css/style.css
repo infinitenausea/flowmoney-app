@@ -430,6 +430,10 @@ button {
   gap: 6px;
   padding: 16px;
   min-height: 72px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 
 .amount-display {
@@ -497,8 +501,9 @@ button {
 
 .numpad-key:active,
 .numpad-key.pressed {
-  transform: scale(0.93);
-  background: color-mix(in srgb, var(--secondary-bg-color) 70%, var(--text-color) 15%);
+  transform: scale(0.95);
+  background-color: rgba(0, 0, 0, 0.05);
+  transition: transform 0.08s ease;
 }
 
 .numpad-key--action {
@@ -1581,8 +1586,8 @@ input[type="range"]::-moz-range-thumb {
 /* Emoji picker — 6-column grid */
 .cat-emoji-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: var(--spacing-sm);
   padding: 0 16px 16px;
   max-height: 280px;
   overflow-y: auto;
@@ -1616,10 +1621,10 @@ input[type="range"]::-moz-range-thumb {
 
 /* Color palette — row of swatches */
 .cat-color-palette {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: var(--spacing-sm);
   padding: 0 16px 20px;
-  flex-wrap: wrap;
   max-height: 180px;
   overflow-y: auto;
 }
