@@ -1316,19 +1316,28 @@ input[type="range"]::-moz-range-thumb {
   color: var(--hint-color);
 }
 
-.btn-save-limit {
+.btn-save-limit,
+.btn-delete-category,
+.btn-reorder-category {
   width: 100%;
   height: 52px;
-  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 8px;
   border-radius: var(--radius-lg);
-  background: var(--accent-color);
-  color: #ffffff;
   font-size: var(--fs-base);
   font-weight: 600;
   letter-spacing: 0.01em;
   transition: var(--transition-base), background-color 0.2s ease;
   will-change: transform, opacity;
   touch-action: manipulation;
+}
+
+.btn-save-limit {
+  margin-top: 12px;
+  background: var(--accent-color);
+  color: #ffffff;
 }
 
 .btn-save-limit:active {
@@ -1337,19 +1346,9 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .btn-delete-category {
-  width: 100%;
-  height: 52px;
-  margin-top: 8px;
-  border-radius: var(--radius-lg);
   background: transparent;
   color: var(--danger-color);
   border: 1.5px solid var(--danger-color);
-  font-size: var(--fs-base);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  transition: var(--transition-base), background-color 0.2s ease;
-  will-change: transform, opacity;
-  touch-action: manipulation;
 }
 
 .btn-delete-category:active {
@@ -1359,24 +1358,14 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .btn-reorder-category {
-  width: 100%;
-  height: 52px;
-  margin-top: 8px;
-  border-radius: var(--radius-lg);
   background: transparent;
-  color: var(--accent-color);
-  border: 1.5px solid var(--accent-color);
-  font-size: var(--fs-base);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  transition: var(--transition-base), background-color 0.2s ease;
-  will-change: transform, opacity;
-  touch-action: manipulation;
+  color: var(--hint-color);
+  border: 1.5px solid var(--hint-color);
 }
 
 .btn-reorder-category:active {
   transform: scale(0.97);
-  opacity: 0.88;
+  background: var(--secondary-bg-color);
 }
 
 /* ═══════════════════════════════════════════════════
