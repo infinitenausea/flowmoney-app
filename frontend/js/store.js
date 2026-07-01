@@ -23,6 +23,9 @@ const Store = (() => {
     inputAmount:     '',
     selectedCategory: null,
 
+    // Режим сортировки категорий
+    isReorderingMode: false,
+
     // Данные
     categories:   [],
     transactions: [],

@@ -238,10 +238,12 @@ const StorageManager = (() => {
 
   /**
    * Сохраняет пользовательскую категорию локально и обновляет Store.
-   * @param {{ id: string, name: string, icon: string, color: string, is_system: boolean, sort_order: number }} cat
+   * sort_order всегда назначается по текущей длине массива — источник истины здесь,
+   * а не у вызывающего кода.
+   * @param {{ id: string, name: string, icon: string, color: string, is_system: boolean }} cat
    */
   function saveUserCategory(cat) {
-    const entry = { ...cat, synced: false };
+    const entry = { ...cat, sort_order: _userCategories.length, synced: false };
     _userCategories.push(entry);
     try {
       localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
@@ -267,6 +269,38 @@ const StorageManager = (() => {
     Store.state.categories = (Store.state.categories || []).map(c =>
       c.id === cat.id ? _userCategories[idx] : c
     );
+  }
+
+  /**
+   * Переприсваивает sort_order пользовательским категориям по фактическому порядку
+   * их id (обычно взятому из текущего DOM-расположения карусели после Drag-n-Drop).
+   * Затронутые категории помечаются synced: false, чтобы фоновый Sync их отправил.
+   * @param {string[]} orderedIds — id категорий в желаемом визуальном порядке
+   * @returns {Object[]} актуальный список пользовательских категорий
+   */
+  function reorderCategories(orderedIds) {
+    let changed = false;
+
+    orderedIds.forEach((id, index) => {
+      const idx = _userCategories.findIndex(c => String(c.id) === String(id));
+      if (idx === -1) return;
+      const cat = _userCategories[idx];
+      if (cat.sort_order !== index || cat.synced !== false) {
+        _userCategories[idx] = { ...cat, sort_order: index, synced: false };
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      try {
+        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(_userCategories));
+      } catch (e) {
+        console.warn('[Storage] Failed to persist reordered categories:', e.message);
+      }
+      Store.state.categories = getUserCategories();
+    }
+
+    return getUserCategories();
   }
 
   /**
@@ -394,7 +428,7 @@ const StorageManager = (() => {
     return JSON.parse(JSON.stringify(_transactions));
   }
 
-  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, updateUserCategory, getUserCategories, getUnsyncedCategories, markCategoriesAsSynced, mergeCategoriesFromServer, _dump };
+  return { init, saveTransactionLocally, getUnsyncedTransactions, markAsSynced, deleteLocally, bulkLoad, mergeFromServer, getLastSyncedAt, saveUserCategory, updateUserCategory, reorderCategories, getUserCategories, getUnsyncedCategories, markCategoriesAsSynced, mergeCategoriesFromServer, _dump };
 })();
 
 window.StorageManager = StorageManager;

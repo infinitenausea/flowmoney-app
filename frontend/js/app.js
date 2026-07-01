@@ -344,6 +344,9 @@ const CategoryCreationSheet = (() => {
     const deleteBtn = document.getElementById('category-delete-btn');
     if (deleteBtn) deleteBtn.style.display = _editMode ? 'block' : 'none';
 
+    const reorderBtn = document.getElementById('category-reorder-btn');
+    if (reorderBtn) reorderBtn.style.display = _editMode ? 'block' : 'none';
+
     _updatePreview();
     _syncEmojiGrid();
     _renderColorPalette();
@@ -388,7 +391,6 @@ const CategoryCreationSheet = (() => {
       icon: _emoji,
       color: _color,
       is_system: false,
-      sort_order: 999,
     };
 
     tg?.HapticFeedback?.impactOccurred('medium');
@@ -419,6 +421,13 @@ const CategoryCreationSheet = (() => {
 
     const deleteBtn = document.getElementById('category-delete-btn');
     if (deleteBtn) deleteBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); _delete(); });
+
+    const reorderBtn = document.getElementById('category-reorder-btn');
+    if (reorderBtn) reorderBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      close();
+      Store.state.isReorderingMode = true;
+    });
 
     // Build emoji grid via createElement (XSS-safe; values are hardcoded)
     const grid = document.getElementById('cat-emoji-grid');
@@ -480,7 +489,9 @@ const CategoryCarousel = (() => {
     const prevSelectedId = Store.state.selectedCategory;
     // Archived categories (is_deleted) stay in the store for history resolution
     // but must never appear in the creation carousel.
-    const activeCategories = categories.filter(c => !c.is_deleted);
+    const activeCategories = categories
+      .filter(c => !c.is_deleted)
+      .sort((a, b) => a.sort_order - b.sort_order);
 
     // If previously selected category was deleted, clear the selection
     if (prevSelectedId && !activeCategories.some(cat => cat.id === prevSelectedId)) {
@@ -531,9 +542,19 @@ const CategoryCarousel = (() => {
 
     addBtn.appendChild(addIcon);
     addBtn.appendChild(addLabel);
+    if (Store.state.isReorderingMode) addBtn.style.display = 'none';
     fragment.appendChild(addBtn);
 
     carousel.appendChild(fragment);
+  }
+
+  function _setReorderingMode(active) {
+    const carousel = document.getElementById('category-carousel');
+    const doneBtn = document.getElementById('category-reorder-done-btn');
+    if (carousel) carousel.classList.toggle('reordering-mode', active);
+    const addBtn = carousel ? carousel.querySelector('.category-add-btn') : null;
+    if (addBtn) addBtn.style.display = active ? 'none' : '';
+    if (doneBtn) doneBtn.style.display = active ? 'block' : 'none';
   }
 
   function init() {
@@ -598,6 +619,7 @@ const CategoryCarousel = (() => {
 
       if (_supportsTouch) {
         carousel.addEventListener('touchstart', (e) => {
+          if (Store.state.isReorderingMode) return;
           if (e.target.closest('.category-add-btn')) {
             e.preventDefault();
             tg?.HapticFeedback?.impactOccurred('light');
@@ -629,6 +651,7 @@ const CategoryCarousel = (() => {
         carousel.addEventListener('touchcancel', _cancelLongPress);
       } else {
         carousel.addEventListener('pointerdown', (e) => {
+          if (Store.state.isReorderingMode) return;
           if (e.target.closest('.category-add-btn')) {
             e.preventDefault();
             tg?.HapticFeedback?.impactOccurred('light');
@@ -654,12 +677,98 @@ const CategoryCarousel = (() => {
 
         carousel.addEventListener('pointercancel', _cancelLongPress);
       }
+
+      // ── Режим сортировки: перетаскивание .category-item через Pointer Events ──
+      // Работает единообразно для touch/mouse/pen и активно только при isReorderingMode.
+      let _drag = null; // { item, pointerId, startX }
+
+      const _endDrag = () => {
+        if (!_drag) return;
+        try { _drag.item.releasePointerCapture(_drag.pointerId); } catch (e) { /* уже отпущен */ }
+        _drag.item.classList.remove('dragging');
+        _drag.item.style.transform = '';
+        _drag.item.style.zIndex = '';
+        carousel.removeEventListener('pointermove', _onDragMove);
+        carousel.removeEventListener('pointerup', _onDragEnd);
+        carousel.removeEventListener('pointercancel', _onDragEnd);
+        _drag = null;
+      };
+
+      function _onDragMove(e) {
+        if (!_drag || e.pointerId !== _drag.pointerId) return;
+        e.preventDefault();
+
+        const dx = e.clientX - _drag.startX;
+        _drag.item.style.transform = `translateX(${dx}px)`;
+
+        const draggedRect = _drag.item.getBoundingClientRect();
+        const draggedCenter = draggedRect.left + draggedRect.width / 2;
+
+        const prev = _drag.item.previousElementSibling;
+        if (prev && prev.classList.contains('category-item')) {
+          const prevRect = prev.getBoundingClientRect();
+          if (draggedCenter < prevRect.left + prevRect.width / 2) {
+            carousel.insertBefore(_drag.item, prev);
+            _drag.startX = e.clientX;
+            _drag.item.style.transform = 'translateX(0px)';
+            return;
+          }
+        }
+
+        const next = _drag.item.nextElementSibling;
+        if (next && next.classList.contains('category-item')) {
+          const nextRect = next.getBoundingClientRect();
+          if (draggedCenter > nextRect.left + nextRect.width / 2) {
+            carousel.insertBefore(next, _drag.item);
+            _drag.startX = e.clientX;
+            _drag.item.style.transform = 'translateX(0px)';
+          }
+        }
+      }
+
+      function _onDragEnd(e) {
+        if (!_drag || e.pointerId !== _drag.pointerId) return;
+        _endDrag();
+      }
+
+      carousel.addEventListener('pointerdown', (e) => {
+        if (!Store.state.isReorderingMode) return;
+        const item = e.target.closest('.category-item');
+        if (!item) return;
+        e.preventDefault();
+
+        tg?.HapticFeedback?.impactOccurred('medium');
+
+        _drag = { item, pointerId: e.pointerId, startX: e.clientX };
+        item.setPointerCapture(e.pointerId);
+        item.classList.add('dragging');
+
+        carousel.addEventListener('pointermove', _onDragMove);
+        carousel.addEventListener('pointerup', _onDragEnd);
+        carousel.addEventListener('pointercancel', _onDragEnd);
+      });
     }
 
     // Re-render whenever categories change, including an empty array (all deleted).
     // Array.isArray guards against the null/undefined default before StorageManager.init() runs.
     Store.subscribe('categories', (cats) => {
       if (Array.isArray(cats)) render(cats);
+    });
+
+    Store.subscribe('isReorderingMode', (active) => _setReorderingMode(active));
+
+    const doneBtn = document.getElementById('category-reorder-done-btn');
+    if (doneBtn) doneBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      tg?.HapticFeedback?.impactOccurred('light');
+
+      const orderedIds = Array.from(
+        document.querySelectorAll('#category-carousel .category-item')
+      ).map(el => el.dataset.id);
+      StorageManager.reorderCategories(orderedIds);
+      SyncRunner.syncWithBackend();
+
+      Store.state.isReorderingMode = false;
     });
   }
 
