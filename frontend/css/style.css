@@ -21,9 +21,21 @@
   --font-family:      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-size-base:   16px;
 
+  /* Жёсткая шкала размеров шрифта */
+  --fs-xs:            0.75rem;  /* 12px */
+  --fs-sm:            0.875rem; /* 14px */
+  --fs-base:          1rem;     /* 16px */
+  --fs-lg:            1.25rem;  /* 20px */
+  --fs-xl:            2rem;     /* 32px */
+
+  /* Системные отступы */
+  --spacing-sm:       8px;
+  --spacing-md:       16px;
+  --spacing-lg:       24px;
+
   /* Радиусы */
   --radius-sm:        8px;
-  --radius-md:        16px;
+  --radius-md:        12px;
   --radius-lg:        24px;
   --radius-full:      9999px;
 
@@ -239,8 +251,9 @@ button {
   gap: 4px;
   height: var(--nav-height);
   color: var(--hint-color);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 500;
+  border-radius: var(--radius-md);
   transition: color 0.18s ease, transform 0.18s ease;
   position: relative;
 }
@@ -280,22 +293,22 @@ button {
 
 .budget-widget {
   text-align: center;
-  padding: 20px 16px 12px;
+  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-sm);
 }
 
 .budget-period-toggle {
   display: inline-flex;
   background: var(--secondary-bg-color);
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   padding: 3px;
-  margin-bottom: 10px;
+  margin-bottom: var(--spacing-sm);
   gap: 2px;
 }
 
 .budget-period-option {
-  padding: 4px 16px;
-  border-radius: 18px;
-  font-size: 12px;
+  padding: 4px var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--hint-color);
   cursor: pointer;
@@ -311,15 +324,15 @@ button {
 }
 
 .budget-label {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--hint-color);
-  margin-top: 6px;
+  margin-top: var(--spacing-sm);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
 .budget-amount {
-  font-size: 42px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   color: var(--success-color);
   line-height: 1;
@@ -342,13 +355,13 @@ button {
 
 .category-carousel-wrap {
   overflow: hidden;
-  margin: 0 -16px;
+  margin: 0 calc(var(--spacing-md) * -1);
 }
 
 .category-carousel {
   display: flex;
-  gap: 12px;
-  padding: 8px 16px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
@@ -392,7 +405,7 @@ button {
 }
 
 .category-name {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--hint-color);
   max-width: 60px;
   text-align: center;
@@ -463,8 +476,8 @@ button {
 .numpad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 0 8px;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-sm);
 }
 
 .numpad-key {
@@ -472,7 +485,7 @@ button {
   border-radius: var(--radius-md);
   background: var(--secondary-bg-color);
   color: var(--text-color);
-  font-size: 22px;
+  font-size: var(--fs-lg);
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -534,15 +547,15 @@ button {
 
 .period-btn {
   flex: 1;
-  padding: 8px 0;
+  padding: var(--spacing-sm) 0;
   border: 1.5px solid var(--hint-color, #aaa);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hint-color, #aaa);
-  font-size: 14px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
