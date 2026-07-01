@@ -161,11 +161,17 @@ const SwipeGesture = (() => {
 
       if (!el) return;
 
+      // If this item is already pinned open (delete panel revealed), the drag
+      // should continue from its current offset instead of jumping back to 0 —
+      // baking that offset into _startX means every later `dx = clientX - _startX`
+      // naturally lands on `currentOffset + fingerMovement`.
+      const baseX = el.classList.contains('swipe-opened-delete') ? -MAX_LEFT : 0;
+
       _item    = el;
       _content = el.querySelector('.timeline-item-content');
       _delEl   = el.querySelector('.swipe-action-delete');
       _dupEl   = el.querySelector('.swipe-action-duplicate');
-      _startX  = e.clientX;
+      _startX  = e.clientX - baseX;
       _startY  = e.clientY;
       _isH     = null;
       _pid     = e.pointerId;
