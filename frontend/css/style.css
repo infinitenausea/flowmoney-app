@@ -1749,6 +1749,7 @@ input[type="range"]::-moz-range-thumb {
   color: var(--hint-color);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  margin-bottom: var(--spacing-sm);
 }
 
 /* Emoji picker — 6-column grid */
@@ -1757,6 +1758,7 @@ input[type="range"]::-moz-range-thumb {
   grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
   gap: var(--spacing-sm);
   padding: 0 16px 16px;
+  margin-top: 4px;
   max-height: 280px;
   overflow-y: auto;
 }
@@ -1793,6 +1795,7 @@ input[type="range"]::-moz-range-thumb {
   grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
   gap: var(--spacing-sm);
   padding: 0 16px 20px;
+  margin-top: 4px;
   max-height: 180px;
   overflow-y: auto;
 }
