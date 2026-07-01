@@ -376,6 +376,7 @@ button {
 
 .budget-amount.danger {
   color: var(--danger-color);
+  font-weight: 900;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -396,6 +397,8 @@ button {
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 85%, transparent 100%);
 }
 
 .category-carousel::-webkit-scrollbar {
@@ -578,6 +581,7 @@ button {
 .analytics-period-switcher {
   display: flex;
   gap: 8px;
+  margin-top: var(--spacing-md);
   margin-bottom: 12px;
 }
 
@@ -653,6 +657,16 @@ button {
   touch-action: manipulation;
   transition: transform 0.1s ease, opacity 0.1s ease;
   -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+
+.calendar-nav-btn::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: -6px;
+  right: -6px;
 }
 
 .calendar-nav-btn:active {
@@ -1218,6 +1232,16 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
   transition: transform 0.1s ease;
   touch-action: manipulation;
+  position: relative;
+}
+
+.budget-modal-close::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: -6px;
+  right: -6px;
 }
 
 .budget-modal-close:active {
@@ -1383,6 +1407,16 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 0.2s ease, opacity 0.2s ease;
+  position: relative;
+}
+
+.converter-swap-btn::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: -6px;
+  right: -6px;
 }
 
 .converter-swap-btn:active {
@@ -1717,9 +1751,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .cat-color-swatch {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
+  width: 100%;
+  max-width: 44px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 0.1s ease;
