@@ -338,6 +338,9 @@ button {
   line-height: 1;
   transition: color 0.25s ease;
   will-change: color;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .budget-amount.warning {
@@ -654,7 +657,8 @@ button {
 }
 
 .calendar-day {
-  aspect-ratio: 1;
+  min-height: 44px;
+  min-width: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -840,6 +844,37 @@ button {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Duplicate action panel — sits behind the content, revealed on right-swipe */
+.swipe-action-duplicate {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 130px;
+  background: var(--success-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateX(-40%) scale(0.85);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Pinned-open state after a committed left-swipe past DELETE_THRESHOLD.
+   The content is held shifted left by inline transform (set in gestures.js);
+   pointer-events is restored here so the confirm tap on the panel registers. */
+.timeline-item.swipe-opened-delete .swipe-action-delete {
+  pointer-events: auto;
 }
 
 .timeline-item-icon {
@@ -1661,4 +1696,23 @@ input[type="range"]::-moz-range-thumb {
 .cat-sheet-confirm {
   margin: 0 16px;
   width: calc(100% - 32px);
+}
+
+/* ═══════════════════════════════════════════════════
+   Малые экраны по высоте (Home: numpad + budget-widget)
+═══════════════════════════════════════════════════ */
+
+@media (max-height: 660px) {
+  .budget-widget {
+    padding: var(--spacing-sm) var(--spacing-md) 4px;
+  }
+
+  .numpad {
+    gap: 6px;
+    padding: 0 var(--spacing-sm);
+  }
+
+  .numpad-key {
+    height: 44px;
+  }
 }

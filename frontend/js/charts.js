@@ -288,6 +288,17 @@ const DonutChart = (() => {
           '<path d="M9 6V4h6v2"/></svg>' +
           '<span>Удалить</span>';
 
+        // Swipe-to-duplicate overlay — static SVG, innerHTML is safe here
+        const dupEl = document.createElement('div');
+        dupEl.className = 'swipe-action-duplicate';
+        dupEl.setAttribute('aria-hidden', 'true');
+        dupEl.innerHTML =
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+          ' stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+          '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
+          '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+          '<span>Дублировать</span>';
+
         itemEl.appendChild(contentEl);
 
         if (tx.comment) {
@@ -298,6 +309,7 @@ const DonutChart = (() => {
         }
 
         itemEl.appendChild(swipeEl);
+        itemEl.appendChild(dupEl);
         groupEl.appendChild(itemEl);
       });
 
