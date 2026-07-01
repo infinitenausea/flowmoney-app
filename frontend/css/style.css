@@ -1370,6 +1370,24 @@ input[type="range"]::-moz-range-thumb {
   background: var(--secondary-bg-color);
 }
 
+/* Геометрический эталон для кнопок шторки редактирования категории —
+   таргетируем по ID, чтобы не затронуть #budget-modal-save (тоже .btn-save-limit) */
+#category-reorder-btn,
+#category-delete-btn,
+#cat-sheet-confirm {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  height: 48px !important;
+  padding: 0 var(--spacing-md) !important;
+  border-radius: var(--radius-md) !important;
+  font-size: var(--fs-base) !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+}
+
 /* ═══════════════════════════════════════════════════
    Конвертер валют
 ═══════════════════════════════════════════════════ */
