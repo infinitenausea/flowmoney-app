@@ -75,28 +75,32 @@ const Settings = (() => {
     const now = new Date();
 
     const wLimit = Store.state.weeklyLimit || 0;
+    let wSpent = 0;
     if (wLimit > 0) {
       const wStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
       wStart.setHours(0, 0, 0, 0);
-      const wSpent = txs.filter(tx => !tx.is_deleted && new Date(tx.created_at) >= wStart)
-                        .reduce((s, tx) => s + Number(tx.amount), 0);
-      _updateBar('weekly-progress-bar', 'weekly-spend-display', wSpent, wLimit, cur);
+      wSpent = txs.filter(tx => !tx.is_deleted && new Date(tx.created_at) >= wStart)
+                  .reduce((s, tx) => s + Number(tx.amount), 0);
     }
+    _updateBar('weekly-progress-bar', 'weekly-spend-display', wSpent, wLimit, cur);
 
     const mLimit = Store.state.monthlyLimit || 0;
+    let mSpent = 0;
     if (mLimit > 0) {
       const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const mSpent = txs.filter(tx => !tx.is_deleted && new Date(tx.created_at) >= mStart)
-                        .reduce((s, tx) => s + Number(tx.amount), 0);
-      _updateBar('monthly-progress-bar', 'monthly-spend-display', mSpent, mLimit, cur);
+      mSpent = txs.filter(tx => !tx.is_deleted && new Date(tx.created_at) >= mStart)
+                  .reduce((s, tx) => s + Number(tx.amount), 0);
     }
+    _updateBar('monthly-progress-bar', 'monthly-spend-display', mSpent, mLimit, cur);
   }
 
   function _updateBar(barId, spendId, spent, limit, currency) {
     const bar = document.getElementById(barId);
     if (!bar) return;
 
-    const pct = Math.min(100, (spent / limit) * 100);
+    const limitValue = parseFloat(limit) || 0;
+    const spentValue = parseFloat(spent) || 0;
+    const pct = (limitValue > 0) ? Math.min((spentValue / limitValue) * 100, 100) : 0;
     bar.style.width = pct + '%';
     bar.style.background = pct >= 90
       ? 'var(--danger-color)'
@@ -106,7 +110,7 @@ const Settings = (() => {
 
     const spendEl = document.getElementById(spendId);
     if (spendEl && typeof formatCurrency === 'function') {
-      spendEl.textContent = formatCurrency(spent, currency);
+      spendEl.textContent = formatCurrency(spentValue, currency);
     }
   }
 
